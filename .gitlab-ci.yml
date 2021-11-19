@@ -1,0 +1,15 @@
+---
+stages:
+  - build
+
+build:
+  stage: build
+  tags: [fsrv-shell]
+  image: archlinux
+  before_script:
+    - mkdir bin
+    - sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b bin
+    - chmod +x bin/task
+  script:
+    - bin/task
+

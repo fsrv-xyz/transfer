@@ -50,13 +50,18 @@ func init() {
 		p.S3Endpoint = os.Getenv("S3_ENDPOINT")
 	}
 	if os.Getenv("AWS_ACCESS_KEY_ID") != "" {
-		p.S3Endpoint = os.Getenv("AWS_ACCESS_KEY_ID")
+		p.S3AccessKey = os.Getenv("AWS_ACCESS_KEY_ID")
 	}
 	if os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
-		p.S3Endpoint = os.Getenv("AWS_SECRET_ACCESS_KEY")
+		p.S3SecretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
+	if os.Getenv("S3_BUCKET") != "" {
+		p.S3BucketName = os.Getenv("S3_BUCKET")
 	}
 
-	if p.S3AccessKey == "" || p.S3SecretKey == "" || p.S3Endpoint == "" {
+	fmt.Println(os.Environ())
+	fmt.Printf("%#v\n", p)
+	if p.S3AccessKey == "" || p.S3SecretKey == "" || p.S3Endpoint == "" || p.S3BucketName == "" {
 		fmt.Println("no s3 credentials given")
 		os.Exit(1)
 	}
@@ -69,7 +74,7 @@ func main() {
 	c.logger = log.New(os.Stdout, "", log.Lshortfile|log.Lmsgprefix)
 	c.minioClient, err = minio.New(p.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(p.S3AccessKey, p.S3SecretKey, ""),
-		Secure: true,
+		Secure: false,
 	})
 	if err != nil {
 		c.logger.Println(err)

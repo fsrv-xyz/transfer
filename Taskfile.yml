@@ -1,0 +1,30 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  ImageName: transfer
+  ImageOwner: fsrv
+  Version:
+    sh: date +%s
+
+tasks:
+  build:
+    cmds:
+      - docker build --no-cache -t "{{.ImageName}}" .
+  tag:
+    cmds:
+      - task: build
+      - docker tag "{{.ImageName}}" "{{.ImageOwner}}/{{.ImageName}}:{{.Version}}"
+      - docker tag "{{.ImageName}}" "{{.ImageOwner}}/{{.ImageName}}:latest"
+  publish:
+    cmds:
+      - task: tag
+      - docker push "{{.ImageOwner}}/{{.ImageName}}:{{.Version}}"
+      - docker push "{{.ImageOwner}}/{{.ImageName}}:latest"
+  default:
+    cmds:
+      - task: publish
+  run:
+    cmds:
+      - docker run -v $(pwd)/share:/build -it "{{.ImageName}}" /bin/bash
