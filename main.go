@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
 
 const (
@@ -30,6 +32,7 @@ type Parameters struct {
 	S3AccessKey   string
 	S3SecretKey   string
 	S3Endpoint    string
+	S3UseSecurity bool
 	S3BucketName  string
 	UploadLimitGB int64
 	ListenAddress string
@@ -42,8 +45,9 @@ func init() {
 	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
 	flag.StringVar(&p.S3SecretKey, "s3.secret", "", "s3 secret key")
 	flag.StringVar(&p.S3BucketName, "s3.bucket", "", "s3 storage bucket")
-	flag.StringVar(&p.ListenAddress, "web.listen-address", "", "web server listen address")
+	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
 	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
+	flag.BoolVar(&p.S3UseSecurity, "s3.secure", true, "use tls for connection")
 	flag.Parse()
 
 	if os.Getenv("S3_ENDPOINT") != "" {
@@ -72,7 +76,7 @@ func main() {
 	c.logger = log.New(os.Stdout, "", log.Lshortfile|log.Lmsgprefix)
 	c.minioClient, err = minio.New(p.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(p.S3AccessKey, p.S3SecretKey, ""),
-		Secure: false,
+		Secure: p.S3UseSecurity,
 	})
 	if err != nil {
 		c.logger.Println(err)
@@ -83,9 +87,27 @@ func main() {
 	r.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
 	r.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
 
+	// start cleanup worker
+	go c.CleanupWorker()
+
+	// start webserver
 	c.logger.Printf("Listening on %+q\n", p.ListenAddress)
 	if err := http.ListenAndServe(p.ListenAddress, r); err != nil {
 		log.Fatalln(err)
+	}
+}
+
+func (c *Config) CleanupWorker() {
+	for {
+		for object := range c.minioClient.ListObjects(context.Background(), p.S3BucketName, minio.ListObjectsOptions{Recursive: true}) {
+			if object.LastModified.Add(1*time.Hour).Before(time.Now()) {
+				c.logger.Printf("[cleanup] - remove %+v\n", object.Key)
+				if err := c.minioClient.RemoveObject(context.Background(), p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
+					c.logger.Println(err)
+				}
+			}
+		}
+		time.Sleep(30*time.Second)
 	}
 }
 
@@ -137,7 +159,10 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uuid.New()
-	_, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, r.Body, r.ContentLength, minio.PutObjectOptions{ContentType: r.Header.Get("Content-Type")})
+	_, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, r.Body, r.ContentLength, minio.PutObjectOptions{
+		ContentType: r.Header.Get("Content-Type"),
+
+	})
 	if err != nil {
 		c.logger.Println(err)
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
