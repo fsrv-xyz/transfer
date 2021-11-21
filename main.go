@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"time"
 )
 
@@ -29,25 +30,27 @@ type Config struct {
 }
 
 type Parameters struct {
-	S3AccessKey   string
-	S3SecretKey   string
-	S3Endpoint    string
-	S3UseSecurity bool
-	S3BucketName  string
-	UploadLimitGB int64
-	ListenAddress string
+	CleanupInterval int
+	ListenAddress   string
+	S3AccessKey     string
+	S3BucketName    string
+	S3Endpoint      string
+	S3SecretKey     string
+	S3UseSecurity   bool
+	UploadLimitGB   int64
 }
 
 var p Parameters
 
 func init() {
-	flag.StringVar(&p.S3Endpoint, "s3.endpoint", "", "address to s3 endpoint")
-	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
-	flag.StringVar(&p.S3SecretKey, "s3.secret", "", "s3 secret key")
-	flag.StringVar(&p.S3BucketName, "s3.bucket", "", "s3 storage bucket")
-	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
-	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
 	flag.BoolVar(&p.S3UseSecurity, "s3.secure", true, "use tls for connection")
+	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
+	flag.IntVar(&p.CleanupInterval, "cleanup.interval", 60, "interval in seconds for cleanup")
+	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
+	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
+	flag.StringVar(&p.S3BucketName, "s3.bucket", "", "s3 storage bucket")
+	flag.StringVar(&p.S3Endpoint, "s3.endpoint", "", "address to s3 endpoint")
+	flag.StringVar(&p.S3SecretKey, "s3.secret", "", "s3 secret key")
 	flag.Parse()
 
 	if os.Getenv("S3_ENDPOINT") != "" {
@@ -83,12 +86,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan bool)
+
+	// catch interrupts
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	go func() {
+		for sig := range sigChan {
+			fmt.Println(sig.String())
+			cancel()
+
+			<-done
+			os.Exit(1)
+		}
+	}()
+
 	r := mux.NewRouter()
 	r.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
 	r.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
 
 	// start cleanup worker
-	go c.CleanupWorker()
+	go c.CleanupWorker(ctx, done)
 
 	// start webserver
 	c.logger.Printf("Listening on %+q\n", p.ListenAddress)
@@ -97,17 +116,28 @@ func main() {
 	}
 }
 
-func (c *Config) CleanupWorker() {
+func (c *Config) CleanupWorker(ctx context.Context, done chan<- bool) {
+	var sleepCounter int
 	for {
-		for object := range c.minioClient.ListObjects(context.Background(), p.S3BucketName, minio.ListObjectsOptions{Recursive: true}) {
-			if object.LastModified.Add(1*time.Hour).Before(time.Now()) {
-				c.logger.Printf("[cleanup] - remove %+v\n", object.Key)
-				if err := c.minioClient.RemoveObject(context.Background(), p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
-					c.logger.Println(err)
+		select {
+		case <-ctx.Done():
+			done <- true
+			return
+		default:
+			if sleepCounter%p.CleanupInterval != 0 {
+				break
+			}
+			for object := range c.minioClient.ListObjects(ctx, p.S3BucketName, minio.ListObjectsOptions{Recursive: true}) {
+				if object.LastModified.Add(1 * time.Hour).Before(time.Now()) {
+					c.logger.Printf("[cleanup] - remove %+v\n", object.Key)
+					if err := c.minioClient.RemoveObject(ctx, p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
+						c.logger.Println(err)
+					}
 				}
 			}
+			sleepCounter = 0
 		}
-		time.Sleep(30*time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -120,22 +150,24 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filePath := fmt.Sprintf("%s/%s", id, filename)
-	info, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
+	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		c.logger.Printf("%+v", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", info.ContentType)
+	w.Header().Set("Content-Type", object.ContentType)
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 
-	reader, err := c.minioClient.GetObject(r.Context(), p.S3BucketName, info.Key, minio.GetObjectOptions{})
+	reader, err := c.minioClient.GetObject(r.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
 	if err != nil {
 		c.logger.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	c.logger.Printf("[download] - %+v\n", object.Key)
 
 	if _, copyError := io.Copy(w, reader); err != nil {
 		c.logger.Println(copyError)
@@ -159,9 +191,8 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uuid.New()
-	_, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, r.Body, r.ContentLength, minio.PutObjectOptions{
+	object, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, r.Body, r.ContentLength, minio.PutObjectOptions{
 		ContentType: r.Header.Get("Content-Type"),
-
 	})
 	if err != nil {
 		c.logger.Println(err)
@@ -169,6 +200,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	c.logger.Printf("[upload] - %+v\n", object.Key)
 	// generate download link
 	fmt.Fprintf(w, "%s/%s/%s", r.Host, id.String(), filename)
 }
