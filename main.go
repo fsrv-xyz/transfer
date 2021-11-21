@@ -59,10 +59,8 @@ func init() {
 		p.S3BucketName = os.Getenv("S3_BUCKET")
 	}
 
-	fmt.Println(os.Environ())
-	fmt.Printf("%#v\n", p)
 	if p.S3AccessKey == "" || p.S3SecretKey == "" || p.S3Endpoint == "" || p.S3BucketName == "" {
-		fmt.Println("no s3 credentials given")
+		fmt.Println("no s3 details given")
 		os.Exit(1)
 	}
 }
@@ -85,6 +83,7 @@ func main() {
 	r.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
 	r.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
 
+	c.logger.Printf("Listening on %+q\n", p.ListenAddress)
 	if err := http.ListenAndServe(p.ListenAddress, r); err != nil {
 		log.Fatalln(err)
 	}
