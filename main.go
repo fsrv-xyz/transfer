@@ -141,6 +141,8 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, r.Body, r.ContentLength, minio.PutObjectOptions{ContentType: r.Header.Get("Content-Type")})
 	if err != nil {
 		c.logger.Println(err)
+		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
+		return
 	}
 
 	// generate download link
