@@ -30,27 +30,29 @@ type Config struct {
 }
 
 type Parameters struct {
-	CleanupInterval int
-	ListenAddress   string
-	S3AccessKey     string
-	S3BucketName    string
-	S3Endpoint      string
-	S3SecretKey     string
-	S3UseSecurity   bool
-	UploadLimitGB   int64
+	CleanupInterval    int
+	ListenAddress      string
+	DownloadLinkPrefix string
+	S3Endpoint         string
+	S3AccessKey        string
+	S3SecretKey        string
+	S3BucketName       string
+	S3UseSecurity      bool
+	UploadLimitGB      int64
 }
 
 var p Parameters
 
 func init() {
-	flag.BoolVar(&p.S3UseSecurity, "s3.secure", true, "use tls for connection")
+	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
 	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
 	flag.IntVar(&p.CleanupInterval, "cleanup.interval", 60, "interval in seconds for cleanup")
-	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
-	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
-	flag.StringVar(&p.S3BucketName, "s3.bucket", "", "s3 storage bucket")
 	flag.StringVar(&p.S3Endpoint, "s3.endpoint", "", "address to s3 endpoint")
+	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
 	flag.StringVar(&p.S3SecretKey, "s3.secret", "", "s3 secret key")
+	flag.StringVar(&p.S3BucketName, "s3.bucket", "", "s3 storage bucket")
+	flag.BoolVar(&p.S3UseSecurity, "s3.secure", true, "use tls for connection")
+	flag.StringVar(&p.DownloadLinkPrefix, "link.prefix", "http", "prepending stuff for download link")
 	flag.Parse()
 
 	if os.Getenv("S3_ENDPOINT") != "" {
@@ -202,5 +204,5 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	c.logger.Printf("[upload] - %+v\n", object.Key)
 	// generate download link
-	fmt.Fprintf(w, "http://%s/%s/%s", r.Host, id.String(), filename)
+	fmt.Fprintf(w, "%s://%s/%s/%s", p.DownloadLinkPrefix, r.Host, id.String(), filename)
 }
