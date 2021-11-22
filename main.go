@@ -204,5 +204,5 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	c.logger.Printf("[upload] - %+v\n", object.Key)
 	// generate download link
-	fmt.Fprintf(w, "%s://%s/%s/%s", p.DownloadLinkPrefix, r.Host, id.String(), filename)
+	fmt.Fprintf(w, "%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, id.String(), filename)
 }
