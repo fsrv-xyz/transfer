@@ -6,7 +6,7 @@ vars:
   ImageName: transfer
   ImageOwner: fsrv
   Version:
-    sh: date +%s
+    sh: if [ -n "{{.CI_COMMIT_TAG}}" ]; then echo {{.CI_COMMIT_TAG}}; else date +%s; fi
 
 tasks:
   build:
@@ -25,6 +25,3 @@ tasks:
   default:
     cmds:
       - task: publish
-  run:
-    cmds:
-      - docker run -v $(pwd)/share:/build -it "{{.ImageName}}" /bin/bash
