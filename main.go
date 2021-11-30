@@ -4,10 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"io"
 	"log"
 	"net/http"
@@ -15,13 +11,37 @@ import (
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
-	_ int64 = iota
-	_       = 1 << (10 * iota) // kilobyte
-	_                          // megabyte
+	_ = 1 << (iota * 10)
+	KB
+	MB
 	GB
+)
+
+var (
+	metricObjectAction = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "transfer",
+		Name:      "object_action",
+		Help:      "Actions applied to objects",
+	}, []string{"action"})
+
+	metricObjectSize = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "transfer",
+		Name:      "object_size_bytes",
+		Help:      "Uploaded objects by size",
+		Buckets:   []float64{1 * KB, 10 * KB, 100 * KB, 1 * MB, 10 * MB, 100 * MB, 300 * MB, 600 * MB, 900 * MB},
+	})
 )
 
 type Config struct {
@@ -30,21 +50,23 @@ type Config struct {
 }
 
 type Parameters struct {
-	CleanupInterval    int
-	ListenAddress      string
-	DownloadLinkPrefix string
-	S3Endpoint         string
-	S3AccessKey        string
-	S3SecretKey        string
-	S3BucketName       string
-	S3UseSecurity      bool
-	UploadLimitGB      int64
+	CleanupInterval      int
+	ListenAddress        string
+	MetricsListenAddress string
+	DownloadLinkPrefix   string
+	S3Endpoint           string
+	S3AccessKey          string
+	S3SecretKey          string
+	S3BucketName         string
+	S3UseSecurity        bool
+	UploadLimitGB        int64
 }
 
 var p Parameters
 
 func init() {
 	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
+	flag.StringVar(&p.MetricsListenAddress, "metrics.listen-address", "127.0.0.1:9042", "metrics endpoint listen address")
 	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
 	flag.IntVar(&p.CleanupInterval, "cleanup.interval", 60, "interval in seconds for cleanup")
 	flag.StringVar(&p.S3Endpoint, "s3.endpoint", "", "address to s3 endpoint")
@@ -71,6 +93,13 @@ func init() {
 	if p.S3AccessKey == "" || p.S3SecretKey == "" || p.S3Endpoint == "" || p.S3BucketName == "" {
 		fmt.Println("no s3 details given")
 		os.Exit(1)
+	}
+}
+
+func metricsWebListener() {
+	http.Handle("/metrics", promhttp.Handler())
+	if http.ListenAndServe(p.MetricsListenAddress, nil) != nil {
+		log.Fatalln("webserver start failed")
 	}
 }
 
@@ -108,8 +137,9 @@ func main() {
 	r.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
 	r.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
 
-	// start cleanup worker
+	// start cleanup worker and metrics server
 	go c.CleanupWorker(ctx, done)
+	go metricsWebListener()
 
 	// start webserver
 	c.logger.Printf("Listening on %+q\n", p.ListenAddress)
@@ -132,6 +162,7 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- bool) {
 			for object := range c.minioClient.ListObjects(ctx, p.S3BucketName, minio.ListObjectsOptions{Recursive: true}) {
 				if object.LastModified.Add(1 * time.Hour).Before(time.Now()) {
 					c.logger.Printf("[cleanup] - remove %+v\n", object.Key)
+					metricObjectAction.With(prometheus.Labels{"action": "delete"}).Inc()
 					if err := c.minioClient.RemoveObject(ctx, p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
 						c.logger.Println(err)
 					}
@@ -170,6 +201,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c.logger.Printf("[download] - %+v\n", object.Key)
+	metricObjectAction.With(prometheus.Labels{"action": "download"}).Inc()
 
 	if _, copyError := io.Copy(w, reader); err != nil {
 		c.logger.Println(copyError)
@@ -202,7 +234,10 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metricObjectSize.Observe(float64(r.ContentLength))
+
 	c.logger.Printf("[upload] - %+v\n", object.Key)
+	metricObjectAction.With(prometheus.Labels{"action": "upload"}).Inc()
 	// generate download link
 	fmt.Fprintf(w, "%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, id.String(), filename)
 }
