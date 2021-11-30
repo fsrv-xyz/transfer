@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	_ = 1 << (iota * 10)
-	KB
+	_  = iota
+	KB = 1 << (10 * iota)
 	MB
 	GB
 )
