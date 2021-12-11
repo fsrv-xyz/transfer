@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -21,6 +24,9 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// ChecksumMetadataFieldName - UserMetadata key for storing the checksum of the file
+const ChecksumMetadataFieldName = "Sha512sum"
 
 const (
 	_  = iota
@@ -135,6 +141,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
+	r.HandleFunc("/{id}/{filename}/{sum:sum}", c.DownloadHandler).Methods(http.MethodGet)
 	r.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
 
 	// start cleanup worker and metrics server
@@ -176,17 +183,30 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- bool) {
 
 func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	// check if handler is called with /.../.../sum
+	_, sumMode := vars["sum"]
+
 	id, idOK := vars["id"]
 	filename, filenameOK := vars["filename"]
 	if !idOK || !filenameOK {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		c.logger.Printf("%+v", err)
+		return
+	}
+
+	// only return checksum when called in sum mode
+	if sumMode {
+		c.logger.Printf("[sum] - %+v\n", object.Key)
+		metricObjectAction.With(prometheus.Labels{"action": "sum"}).Inc()
+
+		fmt.Fprintf(w, "%s\t%s\n", object.UserMetadata[ChecksumMetadataFieldName], object.Key)
 		return
 	}
 
@@ -224,10 +244,27 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metadata := make(map[string]string)
+	sha512SumGenerator := sha512.New()
+
+	buf := &bytes.Buffer{}
+	tee := io.TeeReader(r.Body, buf)
+
+	written, err := io.CopyN(sha512SumGenerator, tee, r.ContentLength)
+	if written != r.ContentLength {
+		c.logger.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	metadata[ChecksumMetadataFieldName] = hex.EncodeToString(sha512SumGenerator.Sum(nil))
+	fmt.Println(metadata)
+
 	id := uuid.New()
-	object, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, r.Body, r.ContentLength, minio.PutObjectOptions{
-		ContentType: r.Header.Get("Content-Type"),
+	object, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, buf, r.ContentLength, minio.PutObjectOptions{
+		ContentType:  r.Header.Get("Content-Type"),
+		UserMetadata: metadata,
 	})
+
 	if err != nil {
 		c.logger.Println(err)
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
