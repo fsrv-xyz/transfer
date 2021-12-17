@@ -206,7 +206,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		c.logger.Printf("[sum] - %+v\n", object.Key)
 		metricObjectAction.With(prometheus.Labels{"action": "sum"}).Inc()
 
-		fmt.Fprintf(w, "%s\t%s\n", object.UserMetadata[ChecksumMetadataFieldName], object.Key)
+		fmt.Fprintf(w, "%s  %s\n", object.UserMetadata[ChecksumMetadataFieldName], filename)
 		return
 	}
 
