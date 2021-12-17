@@ -11,17 +11,17 @@ vars:
 tasks:
   build:
     cmds:
-      - docker build --no-cache -t "{{.ImageName}}" .
+      - podman build --no-cache -t "{{.ImageName}}" .
   tag:
     cmds:
       - task: build
-      - docker tag "{{.ImageName}}" "{{.ImageOwner}}/{{.ImageName}}:{{.Version}}"
-      - docker tag "{{.ImageName}}" "{{.ImageOwner}}/{{.ImageName}}:latest"
+      - podman tag "{{.ImageName}}" "{{.ImageOwner}}/{{.ImageName}}:{{.Version}}"
+      - podman tag "{{.ImageName}}" "{{.ImageOwner}}/{{.ImageName}}:latest"
   publish:
     cmds:
       - task: tag
-      - docker push "{{.ImageOwner}}/{{.ImageName}}:{{.Version}}"
-      - docker push "{{.ImageOwner}}/{{.ImageName}}:latest"
+      - podman push "{{.ImageOwner}}/{{.ImageName}}:{{.Version}}"
+      - podman push "{{.ImageOwner}}/{{.ImageName}}:latest"
   default:
     cmds:
       - task: publish
