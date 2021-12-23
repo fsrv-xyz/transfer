@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -35,6 +36,14 @@ const (
 	GB
 )
 
+type State int
+
+const (
+	_ State = iota
+	StateHealthy
+	StateUnhealthy
+)
+
 var (
 	metricObjectAction = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "transfer",
@@ -48,6 +57,9 @@ var (
 		Help:      "Uploaded objects by size",
 		Buckets:   []float64{1 * KB, 10 * KB, 100 * KB, 1 * MB, 10 * MB, 100 * MB, 300 * MB, 600 * MB, 900 * MB},
 	})
+
+	// declare initial state as unhealthy
+	backendState = StateUnhealthy
 )
 
 type Config struct {
@@ -56,6 +68,8 @@ type Config struct {
 }
 
 type Parameters struct {
+	HealthCheckInterval  int
+	HealthCheckReturnGap time.Duration
 	CleanupInterval      int
 	ListenAddress        string
 	MetricsListenAddress string
@@ -75,6 +89,8 @@ func init() {
 	flag.StringVar(&p.MetricsListenAddress, "metrics.listen-address", "127.0.0.1:9042", "metrics endpoint listen address")
 	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
 	flag.IntVar(&p.CleanupInterval, "cleanup.interval", 60, "interval in seconds for cleanup")
+	flag.IntVar(&p.HealthCheckInterval, "healthcheck.interval", 2, "interval in seconds for healthcheck; set to zero to disable")
+	flag.DurationVar(&p.HealthCheckReturnGap, "healthcheck.return.gap", 2*time.Second, "time in seconds for declaring the service as healthy after successful check")
 	flag.StringVar(&p.S3Endpoint, "s3.endpoint", "", "address to s3 endpoint")
 	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
 	flag.StringVar(&p.S3SecretKey, "s3.secret", "", "s3 secret key")
@@ -102,14 +118,16 @@ func init() {
 	}
 }
 
-func metricsWebListener() {
-	http.Handle("/metrics", promhttp.Handler())
-	if http.ListenAndServe(p.MetricsListenAddress, nil) != nil {
-		log.Fatalln("webserver start failed")
+func webListener(server *http.Server, group *sync.WaitGroup) {
+	log.Printf("Listening on %+q\n", server.Addr)
+	if err := server.ListenAndServe(); err != nil {
+		log.Printf("%+v %+q", err, server.Addr)
+		group.Done()
 	}
 }
 
 func main() {
+	serverWaiter := sync.WaitGroup{}
 	var c = Config{}
 	var err error
 
@@ -123,45 +141,112 @@ func main() {
 		os.Exit(1)
 	}
 
+	applicationRouter := mux.NewRouter()
+	applicationRouter.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
+	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", c.DownloadHandler).Methods(http.MethodGet)
+	applicationRouter.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
+
+	metricsRouter := mux.NewRouter()
+	metricsRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
+	metricsRouter.HandleFunc("/-/healthy", c.HealthCheckHandler).Methods(http.MethodGet)
+
+	// declare http applicationServer
+	servers := []*http.Server{
+		{
+			Addr:        p.ListenAddress,
+			Handler:     applicationRouter,
+			ReadTimeout: 10 * time.Second,
+		},
+		{
+			Addr:    p.MetricsListenAddress,
+			Handler: metricsRouter,
+		},
+	}
+	// create one waitGroup entry for each server
+	serverWaiter.Add(len(servers))
+
+	// start webservers
+	for _, server := range servers {
+		go webListener(server, &serverWaiter)
+	}
+
+	// create context and return channel for worker tasks
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan bool)
+	done := make(chan interface{})
 
 	// catch interrupts
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
 	go func() {
 		for sig := range sigChan {
-			fmt.Println(sig.String())
-			cancel()
-
-			<-done
-			os.Exit(1)
+			c.logger.Printf("receive signal %+q\n", sig.String())
+			// shutdown http servers
+			for _, server := range servers {
+				if err := server.Shutdown(context.Background()); err != nil {
+					c.logger.Fatalln(err)
+				}
+			}
+			cancel() // stop workers
 		}
 	}()
 
-	r := mux.NewRouter()
-	r.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
-	r.HandleFunc("/{id}/{filename}/{sum:sum}", c.DownloadHandler).Methods(http.MethodGet)
-	r.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
-
-	// start cleanup worker and metrics server
-	go c.CleanupWorker(ctx, done)
-	go metricsWebListener()
-
-	server := &http.Server{Addr: p.ListenAddress, Handler: r}
-	// start webserver
-	c.logger.Printf("Listening on %+q\n", p.ListenAddress)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalln(err)
+	// start worker processes
+	workerCount := -1
+	for _, worker := range []func(context.Context, chan<- interface{}){
+		c.CleanupWorker,
+		c.HealthCheckWorker,
+	} {
+		workerCount++
+		go worker(ctx, done)
 	}
+
+	// wait until cleanup worker is done
+	var workersDone int
+	for range done {
+		if workersDone == workerCount {
+			break
+		}
+		workersDone++
+	}
+	// wait until servers are shut down
+	serverWaiter.Wait()
+	c.logger.Println("transfer server terminated")
 }
 
-func (c *Config) CleanupWorker(ctx context.Context, done chan<- bool) {
+func (c *Config) HealthCheckWorker(ctx context.Context, done chan<- interface{}) {
 	var sleepCounter int
 	for {
 		select {
 		case <-ctx.Done():
-			done <- true
+			done <- nil
+			return
+		default:
+			if sleepCounter%p.HealthCheckInterval != 0 {
+				break
+			}
+			exist, err := c.minioClient.BucketExists(ctx, p.S3BucketName)
+			if err != nil || !exist {
+				backendState = StateUnhealthy
+			} else {
+				// wait HealthCheckReturnGap before declaring the services as OK
+				if backendState == StateUnhealthy {
+					time.Sleep(p.HealthCheckReturnGap)
+				}
+				backendState = StateHealthy
+			}
+			sleepCounter = 0
+		}
+		sleepCounter++
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func (c *Config) CleanupWorker(ctx context.Context, done chan<- interface{}) {
+	var sleepCounter int
+	for {
+		select {
+		case <-ctx.Done():
+			done <- nil
 			return
 		default:
 			if sleepCounter%p.CleanupInterval != 0 {
@@ -180,6 +265,17 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- bool) {
 		}
 		sleepCounter++
 		time.Sleep(1 * time.Second)
+	}
+}
+
+func (c *Config) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	switch backendState {
+	case StateUnhealthy:
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, "NOT OK")
+	case StateHealthy:
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "OK")
 	}
 }
 
@@ -259,7 +355,6 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	metadata[ChecksumMetadataFieldName] = hex.EncodeToString(sha512SumGenerator.Sum(nil))
-	fmt.Println(metadata)
 
 	id := uuid.New()
 	object, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, buf, r.ContentLength, minio.PutObjectOptions{
