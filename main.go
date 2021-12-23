@@ -148,9 +148,10 @@ func main() {
 	go c.CleanupWorker(ctx, done)
 	go metricsWebListener()
 
+	server := &http.Server{Addr: p.ListenAddress, Handler: r}
 	// start webserver
 	c.logger.Printf("Listening on %+q\n", p.ListenAddress)
-	if err := http.ListenAndServe(p.ListenAddress, r); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalln(err)
 	}
 }
@@ -177,6 +178,7 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- bool) {
 			}
 			sleepCounter = 0
 		}
+		sleepCounter++
 		time.Sleep(1 * time.Second)
 	}
 }
