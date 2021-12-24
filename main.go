@@ -89,7 +89,7 @@ func init() {
 	flag.StringVar(&p.MetricsListenAddress, "metrics.listen-address", "127.0.0.1:9042", "metrics endpoint listen address")
 	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
 	flag.IntVar(&p.CleanupInterval, "cleanup.interval", 60, "interval in seconds for cleanup")
-	flag.IntVar(&p.HealthCheckInterval, "healthcheck.interval", 2, "interval in seconds for healthcheck; set to zero to disable")
+	flag.IntVar(&p.HealthCheckInterval, "healthcheck.interval", 2, "interval in seconds for healthcheck")
 	flag.DurationVar(&p.HealthCheckReturnGap, "healthcheck.return.gap", 2*time.Second, "time in seconds for declaring the service as healthy after successful check")
 	flag.StringVar(&p.S3Endpoint, "s3.endpoint", "", "address to s3 endpoint")
 	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
