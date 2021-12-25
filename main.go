@@ -111,6 +111,14 @@ func init() {
 	if os.Getenv("S3_BUCKET") != "" {
 		p.S3BucketName = os.Getenv("S3_BUCKET")
 	}
+	if os.Getenv("S3_SECURE") != "" {
+		switch os.Getenv("S3_SECURE") {
+		case "true":
+			p.S3UseSecurity = true
+		case "false":
+			p.S3UseSecurity = false
+		}
+	}
 
 	if p.S3AccessKey == "" || p.S3SecretKey == "" || p.S3Endpoint == "" || p.S3BucketName == "" {
 		fmt.Println("no s3 details given")

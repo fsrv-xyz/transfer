@@ -11,4 +11,4 @@ ENV S3_BUCKET="transfer"
 ENV AWS_ACCESS_KEY_ID="minio"
 ENV AWS_SECRET_ACCESS_KEY="minio123"
 COPY --from=builder /build/transfer /app/transfer
-CMD ["/app/transfer", "-web.listen-address", ":8080"]
+CMD ["/app/transfer", "-web.listen-address", ":8080", "-metrics.listen-address", ":8081"]
