@@ -229,7 +229,7 @@ func (c *Config) HealthCheckWorker(ctx context.Context, done chan<- interface{})
 			done <- nil
 			return
 		default:
-			if sleepCounter/p.HealthCheckInterval == 1 {
+			if sleepCounter/p.HealthCheckInterval == 0 {
 				break
 			}
 			exist, err := c.minioClient.BucketExists(ctx, p.S3BucketName)
@@ -257,7 +257,7 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- interface{}) {
 			done <- nil
 			return
 		default:
-			if sleepCounter/p.CleanupInterval == 1 {
+			if sleepCounter/p.CleanupInterval == 0 {
 				break
 			}
 			for object := range c.minioClient.ListObjects(ctx, p.S3BucketName, minio.ListObjectsOptions{Recursive: true}) {
