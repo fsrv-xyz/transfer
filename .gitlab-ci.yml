@@ -8,31 +8,45 @@ variables:
   ImageOwner: fsrv
   ImageName: transfer
 
-before_script:
-  - export ImageVersion="$(if [ -n ${CI_COMMIT_TAG} ]; then echo ${CI_COMMIT_TAG}; else date +%s; fi)"
-
 build:
   stage: build
   tags: [fsrv-shell]
   script:
     - docker build --no-cache -t "${ImageName}" .
 
-publish:
+publish_latest:
   stage: publish
   tags: [fsrv-shell]
   script:
-    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${VERSION}"
-    - docker push "${ImageOwner}/${ImageName}:${VERSION}"
-  parallel:
-    matrix:
-      - VERSION: [$ImageVersion, latest]
+    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:latest"
+    - docker push "${ImageOwner}/${ImageName}:latest"
+  only:
+    - master
+
+publish_tag_version:
+  stage: publish
+  tags: [fsrv-shell]
+  script:
+    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${CI_COMMIT_TAG}"
+    - docker push "${ImageOwner}/${ImageName}:${CI_COMMIT_TAG}"
+  only:
+    - tag
+
+publish_commit_version:
+  stage: publish
+  tags: [fsrv-shell]
+  script:
+    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${CI_COMMIT_SHORT_SHA}"
+    - docker push "${ImageOwner}/${ImageName}:${CI_COMMIT_SHORT_SHA}"
+  only:
+    - master
 
 rollout:
   stage: deploy
   variables:
-    UPDATE_IMAGE_TAG: "${ImageVersion}"
+    UPDATE_IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
     UPDATE_IMAGE_NAME: "${ImageOwner}/${ImageName}"
   trigger:
-    project: "fsrvcorp/kubernetes/${ImageName}"
+    project: "fsrvcorp/kubernetes/transfer"
     branch: master
 
