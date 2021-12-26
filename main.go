@@ -81,7 +81,7 @@ var p Parameters
 func init() {
 	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
 	flag.StringVar(&p.MetricsListenAddress, "metrics.listen-address", "127.0.0.1:9042", "metrics endpoint listen address")
-	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 1, "Upload limit in GiB")
+	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 2, "Upload limit in GiB")
 	flag.IntVar(&p.CleanupInterval, "cleanup.interval", 60, "interval in seconds for cleanup")
 	flag.IntVar(&p.HealthCheckInterval, "healthcheck.interval", 2, "interval in seconds for healthcheck")
 	flag.DurationVar(&p.HealthCheckReturnGap, "healthcheck.return.gap", 2*time.Second, "time in seconds for declaring the service as healthy after successful check")
