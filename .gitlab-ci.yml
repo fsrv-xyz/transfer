@@ -1,6 +1,7 @@
 ---
 stages:
   - build
+  - deploy
 
 build:
   stage: build
@@ -12,4 +13,11 @@ build:
     - chmod +x bin/task
   script:
     - bin/task
+
+rollout:
+  stage: deploy
+  image: archlinux
+  trigger:
+    project: fsrvcorp/kubernetes/transfer
+    branch: master
 
