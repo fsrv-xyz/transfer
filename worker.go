@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// HealthCheckWorker - Worker for checking health of s3 backend
 func (c *Config) HealthCheckWorker(ctx context.Context, done chan<- interface{}) {
 	var sleepCounter int
 	for {
@@ -36,6 +37,7 @@ func (c *Config) HealthCheckWorker(ctx context.Context, done chan<- interface{})
 	}
 }
 
+// CleanupWorker - Worker for deleting objects after 1 hour
 func (c *Config) CleanupWorker(ctx context.Context, done chan<- interface{}) {
 	var sleepCounter int
 	for {
