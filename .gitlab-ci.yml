@@ -16,7 +16,7 @@ build:
     - docker build --no-cache -t "${ImageName}" .
 
 publish:
-  stage: tag
+  stage: publish
   tags: [fsrv-shell]
   script:
     - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${VERSION}"
