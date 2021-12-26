@@ -16,7 +16,6 @@ build:
 
 rollout:
   stage: deploy
-  image: archlinux
   trigger:
     project: fsrvcorp/kubernetes/transfer
     branch: master
