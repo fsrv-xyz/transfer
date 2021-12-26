@@ -1,22 +1,36 @@
 ---
 stages:
   - build
+  - publish
   - deploy
+
+variables:
+  ImageVersion: `if [ -n "{{.CI_COMMIT_TAG}}" ]; then echo {{.CI_COMMIT_TAG}}; else date +%s; fi`
+  ImageOwner: fsrv
+  ImageName: transfer
 
 build:
   stage: build
   tags: [fsrv-shell]
-  image: archlinux
-  before_script:
-    - mkdir bin
-    - sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b bin
-    - chmod +x bin/task
   script:
-    - bin/task
+    - docker build --no-cache -t "${ImageName}" .
+
+publish:
+  stage: tag
+  tags: [fsrv-shell]
+  script:
+    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${VERSION}"
+    - docker push "${ImageOwner}/${ImageName}:${VERSION}"
+  parallel:
+    matrix:
+      - VERSION: ["${ImageVersion}", latest]
 
 rollout:
   stage: deploy
+  variables:
+    UPDATE_IMAGE_TAG: "${ImageVersion}"
+    UPDATE_IMAGE_NAME: "${ImageOwner}/${ImageName}"
   trigger:
-    project: fsrvcorp/kubernetes/transfer
+    project: "fsrvcorp/kubernetes/${ImageName}"
     branch: master
 
