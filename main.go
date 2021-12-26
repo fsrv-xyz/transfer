@@ -156,11 +156,11 @@ func main() {
 	// declare http applicationServer
 	servers := []*http.Server{
 		{
-			Addr:         p.ListenAddress,
-			Handler:      applicationRouter,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
-			IdleTimeout:  10 * time.Second,
+			Addr:    p.ListenAddress,
+			Handler: applicationRouter,
+			//ReadTimeout:  10 * time.Second,
+			//WriteTimeout: 10 * time.Second,
+			//IdleTimeout:  10 * time.Second,
 		},
 		{
 			Addr:    p.MetricsListenAddress,
