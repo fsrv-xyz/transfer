@@ -150,6 +150,7 @@ func main() {
 
 	metricsRouter := mux.NewRouter()
 	metricsRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
+	metricsRouter.HandleFunc("/-/ready", c.HealthCheckHandler).Methods(http.MethodGet)
 	metricsRouter.HandleFunc("/-/healthy", c.HealthCheckHandler).Methods(http.MethodGet)
 
 	// declare http applicationServer
