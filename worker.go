@@ -23,14 +23,14 @@ func (c *Config) HealthCheckWorker(ctx context.Context, done chan<- interface{})
 			exist, err := c.minioClient.BucketExists(ctx, p.S3BucketName)
 			if err != nil || !exist {
 				if backendState == StateHealthy {
-					c.logger.Printf("[health-check] - switching to state %+q\n", StateUnhealthy)
+					c.logger.Printf("[health-check] - switching to state %+q", "StateUnhealthy")
 					backendState = StateUnhealthy
 				}
 			} else {
 				// wait HealthCheckReturnGap before declaring the services as OK
 				if backendState == StateUnhealthy {
 					time.Sleep(p.HealthCheckReturnGap)
-					c.logger.Printf("[health-check] - switching to state %+q\n", StateHealthy)
+					c.logger.Printf("[health-check] - switching to state %+q", "StateHealthy")
 					backendState = StateHealthy
 				}
 			}
