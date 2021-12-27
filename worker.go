@@ -22,13 +22,17 @@ func (c *Config) HealthCheckWorker(ctx context.Context, done chan<- interface{})
 			}
 			exist, err := c.minioClient.BucketExists(ctx, p.S3BucketName)
 			if err != nil || !exist {
-				backendState = StateUnhealthy
+				if backendState == StateHealthy {
+					c.logger.Printf("[health-check] - switching to state %+q\n", StateUnhealthy)
+					backendState = StateUnhealthy
+				}
 			} else {
 				// wait HealthCheckReturnGap before declaring the services as OK
 				if backendState == StateUnhealthy {
 					time.Sleep(p.HealthCheckReturnGap)
+					c.logger.Printf("[health-check] - switching to state %+q\n", StateHealthy)
+					backendState = StateHealthy
 				}
-				backendState = StateHealthy
 			}
 			sleepCounter = 0
 		}
@@ -49,7 +53,14 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- interface{}) {
 			if sleepCounter/p.CleanupInterval == 0 {
 				break
 			}
+			if backendState != StateHealthy {
+				c.logger.Print("skip cleanup because of unhealthy backend")
+			}
 			for object := range c.minioClient.ListObjects(ctx, p.S3BucketName, minio.ListObjectsOptions{Recursive: true}) {
+				if object.Key == "" {
+					c.logger.Printf("[cleanup] - object has empty key %#v\n", object)
+					break
+				}
 				if object.LastModified.Add(1 * time.Hour).Before(time.Now()) {
 					c.logger.Printf("[cleanup] - remove %+v\n", object.Key)
 					metricObjectAction.With(prometheus.Labels{"action": "delete"}).Inc()

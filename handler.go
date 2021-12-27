@@ -38,6 +38,10 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if breakIfUnhealthy(w) {
+		return
+	}
+
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
@@ -79,6 +83,10 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	filename, ok := vars["filename"]
 	filename = url.QueryEscape(filename)
+
+	if breakIfUnhealthy(w) {
+		return
+	}
 
 	if !ok || filename == "" {
 		w.WriteHeader(http.StatusBadRequest)
