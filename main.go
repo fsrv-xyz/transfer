@@ -30,12 +30,11 @@ const (
 	GB
 )
 
-type State int
+type State string
 
 const (
-	_ State = iota
-	StateHealthy
-	StateUnhealthy
+	StateHealthy   State = "healthy"
+	StateUnhealthy State = "unhealthy"
 )
 
 var (
@@ -133,7 +132,7 @@ func main() {
 	var c = Config{}
 	var err error
 
-	c.logger = log.New(os.Stdout, "", log.Lshortfile|log.Lmsgprefix)
+	c.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
 	c.minioClient, err = minio.New(p.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(p.S3AccessKey, p.S3SecretKey, ""),
 		Secure: p.S3UseSecurity,
@@ -158,9 +157,6 @@ func main() {
 		{
 			Addr:    p.ListenAddress,
 			Handler: applicationRouter,
-			//ReadTimeout:  10 * time.Second,
-			//WriteTimeout: 10 * time.Second,
-			//IdleTimeout:  10 * time.Second,
 		},
 		{
 			Addr:    p.MetricsListenAddress,

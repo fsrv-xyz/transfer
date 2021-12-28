@@ -16,13 +16,11 @@ import (
 )
 
 func (c *Config) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	switch backendState {
-	case StateUnhealthy:
+	if backendState != StateHealthy {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+	if _, writeErr := fmt.Fprintln(w, backendState); writeErr != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, "NOT OK")
-	case StateHealthy:
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "OK")
 	}
 }
 
@@ -38,7 +36,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if breakIfUnhealthy(w) {
+	if cancelRequestIfUnhealthy(w) {
 		return
 	}
 
@@ -46,16 +44,19 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
-		c.logger.Printf("%+v", err)
+		traceLog(c.logger, err)
 		return
 	}
 
 	// only return checksum when called in sum mode
 	if sumMode {
-		c.logger.Printf("[sum] - %+v\n", object.Key)
+		traceLog(c.logger, object.Key)
 		metricObjectAction.With(prometheus.Labels{"action": "sum"}).Inc()
 
-		fmt.Fprintf(w, "%s  %s\n", object.UserMetadata[ChecksumMetadataFieldName], filename)
+		_, httpResponseError := fmt.Fprintf(w, "%s  %s\n", object.UserMetadata[ChecksumMetadataFieldName], filename)
+		if httpResponseError != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -64,16 +65,16 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	reader, err := c.minioClient.GetObject(r.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
 	if err != nil {
-		c.logger.Println(err)
+		traceLog(c.logger, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	c.logger.Printf("[download] - %+v\n", object.Key)
+	traceLog(c.logger, object.Key)
 	metricObjectAction.With(prometheus.Labels{"action": "download"}).Inc()
 
 	if _, copyError := io.Copy(w, reader); err != nil {
-		c.logger.Println(copyError)
+		traceLog(c.logger, copyError)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -84,7 +85,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	filename, ok := vars["filename"]
 	filename = url.QueryEscape(filename)
 
-	if breakIfUnhealthy(w) {
+	if cancelRequestIfUnhealthy(w) {
 		return
 	}
 
@@ -105,7 +106,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	written, err := io.CopyN(sha512SumGenerator, tee, r.ContentLength)
 	if written != r.ContentLength {
-		c.logger.Println(err)
+		traceLog(c.logger, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -118,15 +119,20 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		c.logger.Println(err)
+		traceLog(c.logger, err)
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		return
 	}
 
 	metricObjectSize.Observe(float64(r.ContentLength))
 
-	c.logger.Printf("[upload] - %+v\n", object.Key)
+	traceLog(c.logger, object.Key)
 	metricObjectAction.With(prometheus.Labels{"action": "upload"}).Inc()
+
 	// generate download link
-	fmt.Fprintf(w, "%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, id.String(), filename)
+	_, downloadLinkResponseError := fmt.Fprintf(w, "%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, id.String(), filename)
+	if downloadLinkResponseError != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
