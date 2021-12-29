@@ -50,7 +50,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// only return checksum when called in sum mode
 	if sumMode {
-		traceLog(c.logger, object.Key)
+		traceLog(c.logger, "sum "+object.Key)
 		metricObjectAction.With(prometheus.Labels{"action": "sum"}).Inc()
 
 		_, httpResponseError := fmt.Fprintf(w, "%s  %s\n", object.UserMetadata[ChecksumMetadataFieldName], filename)
@@ -70,7 +70,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	traceLog(c.logger, object.Key)
+	traceLog(c.logger, "download "+object.Key)
 	metricObjectAction.With(prometheus.Labels{"action": "download"}).Inc()
 
 	if _, copyError := io.Copy(w, reader); err != nil {
@@ -126,7 +126,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	metricObjectSize.Observe(float64(r.ContentLength))
 
-	traceLog(c.logger, object.Key)
+	traceLog(c.logger, "upload "+object.Key)
 	metricObjectAction.With(prometheus.Labels{"action": "upload"}).Inc()
 
 	// generate download link
