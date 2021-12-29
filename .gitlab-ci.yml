@@ -22,6 +22,7 @@ publish_latest:
     - docker push "${ImageOwner}/${ImageName}:latest"
   only:
     - master
+    - tags
 
 publish_tag_version:
   stage: publish
@@ -30,7 +31,7 @@ publish_tag_version:
     - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${CI_COMMIT_TAG}"
     - docker push "${ImageOwner}/${ImageName}:${CI_COMMIT_TAG}"
   only:
-    - tag
+    - tags
 
 publish_commit_version:
   stage: publish
@@ -40,6 +41,7 @@ publish_commit_version:
     - docker push "${ImageOwner}/${ImageName}:${CI_COMMIT_SHORT_SHA}"
   only:
     - master
+    - tags
 
 rollout:
   stage: deploy
