@@ -2,7 +2,7 @@
 project_name: transfer
 
 release:
-  draft: true
+  draft: false
   github:
     owner: fsrv-xyz
     name: transfer
