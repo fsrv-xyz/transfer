@@ -1,0 +1,51 @@
+---
+project_name: transfer
+
+release:
+  draft: true
+  github:
+    owner: fsrv-xyz
+    name: transfer
+
+  name_template: 'Release {{.Tag}}'
+
+builds:
+  - id: transfer
+    main: .
+    binary: transfer
+    goos:
+      - darwin
+      - freebsd
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: 386
+
+archives:
+  - name_template: '{{.ProjectName}}-{{.Tag}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}'
+    wrap_in_directory: true
+    format: zip
+    files:
+      - README.md
+      - LICENSE
+  - name_template: '{{.ProjectName}}-{{.Tag}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}'
+    id: targz-archives
+    wrap_in_directory: true
+    format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: '{{ .ProjectName }}-v{{ .Version }}-checksums.txt'
+
+snapshot:
+  name_template: SNAPSHOT-{{ .Commit }}
+
+github_urls:
+  download: https://github.com
+
+dist: dist
