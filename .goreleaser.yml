@@ -21,22 +21,22 @@ builds:
       - amd64
       - arm64
     ignore:
-      - goos: darwin
-        goarch: 386
+      - goos: freebsd
+        goarch: arm64
 
 archives:
   - name_template: '{{.ProjectName}}-{{.Tag}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}'
     wrap_in_directory: true
     format: zip
     files:
-      - README.md
+      - README.org
       - LICENSE
   - name_template: '{{.ProjectName}}-{{.Tag}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}'
     id: targz-archives
     wrap_in_directory: true
     format: tar.gz
     files:
-      - README.md
+      - README.org
       - LICENSE
 
 checksum:
