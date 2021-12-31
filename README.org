@@ -1,0 +1,34 @@
+* Transfer
+This project holds a simple go application for uploading, downloading and checksumming of files.
+All actions require a S3 based storage like minio.
+
+** Parameters
+#+BEGIN_SRC
+Usage of ./transfer:
+  -cleanup.disable
+    	manage object deletion process
+  -cleanup.interval int
+    	interval in seconds for cleanup (default 60)
+  -healthcheck.interval int
+    	interval in seconds for healthcheck (default 2)
+  -healthcheck.return.gap duration
+    	time in seconds for declaring the service as healthy after successful check (default 2s)
+  -link.prefix string
+    	prepending stuff for download link (default "http")
+  -metrics.listen-address string
+    	metrics endpoint listen address (default "127.0.0.1:9042")
+  -s3.access string
+    	s3 access key
+  -s3.bucket string
+    	s3 storage bucket
+  -s3.endpoint string
+    	address to s3 endpoint
+  -s3.secret string
+    	s3 secret key
+  -s3.secure
+    	use tls for connection (default true)
+  -upload.limit int
+    	Upload limit in GiB (default 2)
+  -web.listen-address string
+    	web server listen address (default ":8080")
+#+END_SRC
