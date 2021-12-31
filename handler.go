@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
@@ -50,9 +51,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// only return checksum when called in sum mode
 	if sumMode {
-		traceLog(c.logger, "sum "+object.Key)
 		metricObjectAction.With(prometheus.Labels{"action": "sum"}).Inc()
-
 		_, httpResponseError := fmt.Fprintf(w, "%s  %s\n", object.UserMetadata[ChecksumMetadataFieldName], filename)
 		if httpResponseError != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -70,7 +69,6 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	traceLog(c.logger, "download "+object.Key)
 	metricObjectAction.With(prometheus.Labels{"action": "download"}).Inc()
 
 	if _, copyError := io.Copy(w, reader); err != nil {
@@ -81,7 +79,6 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("%#v\n", r.Header)
 	vars := mux.Vars(r)
 	filename, ok := vars["filename"]
 	filename = url.QueryEscape(filename)
@@ -114,7 +111,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	metadata[ChecksumMetadataFieldName] = hex.EncodeToString(sha512SumGenerator.Sum(nil))
 
 	id := uuid.New()
-	object, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, buf, r.ContentLength, minio.PutObjectOptions{
+	_, err = c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, buf, r.ContentLength, minio.PutObjectOptions{
 		ContentType:  selectContentType(filename),
 		UserMetadata: metadata,
 	})
@@ -126,8 +123,6 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metricObjectSize.Observe(float64(r.ContentLength))
-
-	traceLog(c.logger, "upload "+object.Key)
 	metricObjectAction.With(prometheus.Labels{"action": "upload"}).Inc()
 
 	// generate download link

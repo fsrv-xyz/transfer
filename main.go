@@ -45,12 +45,25 @@ var (
 		Help:      "Actions applied to objects",
 	}, []string{"action"})
 
+	metricEndpointRequests = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "transfer",
+		Name:      "endpoint_requests",
+		Help:      "HTTP endpoint requests",
+	}, []string{"endpoint"})
+
 	metricObjectSize = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "transfer",
 		Name:      "object_size_bytes",
 		Help:      "Uploaded objects by size",
 		Buckets:   []float64{1 * KB, 10 * KB, 100 * KB, 1 * MB, 10 * MB, 100 * MB, 300 * MB, 600 * MB, 900 * MB},
 	})
+
+	metricOperationDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "transfer",
+		Name:      "operation_duration",
+		Help:      "duration per endpoint",
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.2, 0.4, 1, 2, 4, 8, 10, 20},
+	}, []string{"endpoint"})
 
 	// declare initial state as unhealthy
 	backendState = StateUnhealthy
@@ -151,9 +164,9 @@ func main() {
 	}
 
 	applicationRouter := mux.NewRouter()
-	applicationRouter.HandleFunc("/{id}/{filename}", c.DownloadHandler).Methods(http.MethodGet)
-	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", c.DownloadHandler).Methods(http.MethodGet)
-	applicationRouter.HandleFunc("/{filename}", c.UploadHandler).Methods(http.MethodPut)
+	applicationRouter.HandleFunc("/{filename}", apiMiddleware(c.UploadHandler, c.logger, "upload")).Methods(http.MethodPut)
+	applicationRouter.HandleFunc("/{id}/{filename}", apiMiddleware(c.DownloadHandler, c.logger, "download")).Methods(http.MethodGet)
+	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", apiMiddleware(c.DownloadHandler, c.logger, "sum")).Methods(http.MethodGet)
 
 	metricsRouter := mux.NewRouter()
 	metricsRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
