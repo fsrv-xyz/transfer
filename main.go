@@ -73,6 +73,7 @@ type Parameters struct {
 	S3BucketName         string
 	S3UseSecurity        bool
 	UploadLimitGB        int64
+	EnableCleanupWorker  bool
 }
 
 var p Parameters
@@ -89,6 +90,7 @@ func init() {
 	flag.StringVar(&p.S3SecretKey, "s3.secret", "", "s3 secret key")
 	flag.StringVar(&p.S3BucketName, "s3.bucket", "", "s3 storage bucket")
 	flag.BoolVar(&p.S3UseSecurity, "s3.secure", true, "use tls for connection")
+	flag.BoolVar(&p.EnableCleanupWorker, "cleanup.enable", true, "manage object deletion process")
 	flag.StringVar(&p.DownloadLinkPrefix, "link.prefix", "http", "prepending stuff for download link")
 	flag.Parse()
 
@@ -193,10 +195,14 @@ func main() {
 
 	// start worker processes
 	workerCount := -1
-	for _, worker := range []func(context.Context, chan<- interface{}){
-		c.CleanupWorker,
-		c.HealthCheckWorker,
-	} {
+	var workers []func(context.Context, chan<- interface{})
+
+	workers = append(workers, c.HealthCheckWorker)
+	if p.EnableCleanupWorker {
+		workers = append(workers, c.CleanupWorker)
+	}
+
+	for _, worker := range workers {
 		workerCount++
 		go worker(ctx, done)
 	}
