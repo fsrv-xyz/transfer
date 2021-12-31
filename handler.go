@@ -15,7 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func (c *Config) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
 	if backendState != StateHealthy {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
@@ -81,6 +81,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("%#v\n", r.Header)
 	vars := mux.Vars(r)
 	filename, ok := vars["filename"]
 	filename = url.QueryEscape(filename)
@@ -114,7 +115,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New()
 	object, err := c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, buf, r.ContentLength, minio.PutObjectOptions{
-		ContentType:  r.Header.Get("Content-Type"),
+		ContentType:  selectContentType(filename),
 		UserMetadata: metadata,
 	})
 

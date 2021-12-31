@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,6 +80,11 @@ type Parameters struct {
 var p Parameters
 
 func init() {
+	// skip init if running in go test environment
+	if strings.Contains(os.Args[0], "/_test/") || strings.HasSuffix(os.Args[0], ".test") {
+		return
+	}
+
 	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
 	flag.StringVar(&p.MetricsListenAddress, "metrics.listen-address", "127.0.0.1:9042", "metrics endpoint listen address")
 	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 2, "Upload limit in GiB")

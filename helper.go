@@ -2,10 +2,21 @@ package main
 
 import (
 	"log"
+	"mime"
 	"net/http"
 	"path"
 	"runtime"
 )
+
+// selectContentType - parse file extension and determine content type
+func selectContentType(filename string) string {
+	extension := path.Ext(filename)
+	if extension == "" {
+		// return default if no file extension is found
+		return "application/octet-stream"
+	}
+	return mime.TypeByExtension(extension)
+}
 
 // cancelRequestIfUnhealthy - action not possible due to broken backend
 func cancelRequestIfUnhealthy(w http.ResponseWriter) bool {
