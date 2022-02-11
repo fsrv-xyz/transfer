@@ -1,54 +1,31 @@
 ---
 stages:
   - build
-  - publish
   - deploy
 
+.config:
+  image: docker
+  tags:
+    - dind
+
 variables:
-  ImageOwner: fsrv
-  ImageName: transfer
+  IMAGE_NAME: fsrv/${CI_PROJECT_NAME}
 
 build:
+  extends: .config
   stage: build
-  tags: [fsrv-shell]
+  before_script:
+    - apk add curl
+    - echo "${REGISTRY_PASSWORD}" | docker login --password-stdin -u "${REGISTRY_USERNAME}"
+    - mkdir bin && sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b bin && chmod +x bin/task
   script:
-    - docker build --no-cache -t "${ImageName}" .
-
-publish_latest:
-  stage: publish
-  tags: [fsrv-shell]
-  script:
-    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:latest"
-    - docker push "${ImageOwner}/${ImageName}:latest"
-  only:
-    - master
-    - tags
-
-publish_tag_version:
-  stage: publish
-  tags: [fsrv-shell]
-  script:
-    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${CI_COMMIT_TAG}"
-    - docker push "${ImageOwner}/${ImageName}:${CI_COMMIT_TAG}"
-  only:
-    - tags
-
-publish_commit_version:
-  stage: publish
-  tags: [fsrv-shell]
-  script:
-    - docker tag "${ImageName}" "${ImageOwner}/${ImageName}:${CI_COMMIT_SHORT_SHA}"
-    - docker push "${ImageOwner}/${ImageName}:${CI_COMMIT_SHORT_SHA}"
-  only:
-    - master
-    - tags
+    - bin/task 
 
 rollout:
   stage: deploy
   variables:
-    UPDATE_IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
-    UPDATE_IMAGE_NAME: "${ImageOwner}/${ImageName}"
+    UPDATE_IMAGE_TAG: "${CI_COMMIT_TAG}"
+    UPDATE_IMAGE_NAME: "fsrv/transfer"
   trigger:
     project: "fsrvcorp/kubernetes/transfer"
     branch: master
-
