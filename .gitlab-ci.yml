@@ -3,29 +3,26 @@ stages:
   - build
   - deploy
 
-.config:
-  image: docker
-  tags:
-    - dind
-
-variables:
-  IMAGE_NAME: fsrv/${CI_PROJECT_NAME}
-
 build:
-  extends: .config
   stage: build
-  before_script:
-    - apk add curl
-    - echo "${REGISTRY_PASSWORD}" | docker login --password-stdin -u "${REGISTRY_USERNAME}"
-    - mkdir bin && sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b bin && chmod +x bin/task
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
   script:
-    - bin/task 
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${REGISTRY_SERVER}\":{\"auth\":\"$(printf "%s:%s" "${REGISTRY_USERNAME}" "${REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --destination "${REGISTRY_SERVER}/${CI_PROJECT_NAME}:${CI_COMMIT_SHORT_SHA}"
+      --destination "${REGISTRY_SERVER}/${CI_PROJECT_NAME}:latest"
 
 rollout:
   stage: deploy
   variables:
-    UPDATE_IMAGE_TAG: "${CI_COMMIT_TAG}"
-    UPDATE_IMAGE_NAME: "fsrv/transfer"
+    UPDATE_IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
+    UPDATE_IMAGE_NAME: "${REGISTRY_SERVER}/${CI_PROJECT_NAME}"
   trigger:
     project: "fsrvcorp/kubernetes/transfer"
     branch: master
