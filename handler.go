@@ -8,12 +8,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-
-	"github.com/prometheus/client_golang/prometheus"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
@@ -60,6 +60,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", object.ContentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(object.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 
 	reader, err := c.minioClient.GetObject(r.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
