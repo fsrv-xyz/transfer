@@ -173,9 +173,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	sentry.Init(sentry.ClientOptions{
-		Release: version.Revision,
+	sentryInitError := sentry.Init(sentry.ClientOptions{
+		Release:          version.Revision,
+		TracesSampleRate: 1.0,
 	})
+	if sentryInitError != nil {
+		log.Println(sentryInitError)
+	}
 	sentryHandler := sentryhttp.New(sentryhttp.Options{})
 
 	applicationRouter := mux.NewRouter()
