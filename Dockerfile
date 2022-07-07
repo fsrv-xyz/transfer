@@ -2,13 +2,7 @@
 FROM golang AS builder
 WORKDIR /build
 COPY . /build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "\
-                -s -w \
-                -X golang.fsrv.services/version.Version=${DISTVERSIONPREFIX}${DISTVERSION} \
-                -X golang.fsrv.services/version.Revision="39cee13" \
-                -X golang.fsrv.services/version.Branch="master" \
-                -X golang.fsrv.services/version.BuildUser=${USER} \
-                -X golang.fsrv.services/version.BuildDate=${BUILD_DATE}"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build
 
 FROM scratch
 EXPOSE 8080
