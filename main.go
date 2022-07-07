@@ -176,6 +176,7 @@ func main() {
 	sentryInitError := sentry.Init(sentry.ClientOptions{
 		Release:          version.Revision,
 		TracesSampleRate: 1.0,
+		Debug:            true,
 	})
 	log.Println(sentryInitError)
 	sentryHandler := sentryhttp.New(sentryhttp.Options{
