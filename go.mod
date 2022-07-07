@@ -3,6 +3,7 @@ module transfer
 go 1.16
 
 require (
+	github.com/getsentry/sentry-go v0.13.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.8.0
 	github.com/minio/minio-go/v7 v7.0.15

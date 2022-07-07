@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -162,7 +164,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	sentry.Init(sentry.ClientOptions{})
+	sentryHandler := sentryhttp.New(sentryhttp.Options{})
+
 	applicationRouter := mux.NewRouter()
+	applicationRouter.Use(sentryHandler.Handle)
 	applicationRouter.HandleFunc("/{filename}", apiMiddleware(c.UploadHandler, c.logger, "upload")).Methods(http.MethodPut)
 	applicationRouter.HandleFunc("/{id}/{filename}", apiMiddleware(c.DownloadHandler, c.logger, "download")).Methods(http.MethodGet)
 	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", apiMiddleware(c.DownloadHandler, c.logger, "sum")).Methods(http.MethodGet)
