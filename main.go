@@ -120,6 +120,7 @@ func init() {
 
 	if *showVersion {
 		fmt.Println(version.Print(os.Args[0]))
+		os.Exit(0)
 	}
 
 	if os.Getenv("S3_ENDPOINT") != "" {
