@@ -5,7 +5,7 @@ stages:
 
 build:
   stage: build
-  image: golang:latest
+  image: golang
   variables:
     CGO_ENABLED: 0
     GOOS: linux
@@ -21,8 +21,6 @@ build:
   artifacts:
     paths:
       - app
-    when:
-      - on_success
 
 container-build:
   stage: deploy
