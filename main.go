@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fsrv-xyz/version"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/gorilla/mux"
@@ -112,7 +113,14 @@ func init() {
 	flag.BoolVar(&p.S3UseSecurity, "s3.secure", true, "use tls for connection")
 	flag.BoolVar(&p.DisableCleanupWorker, "cleanup.disable", false, "manage object deletion process")
 	flag.StringVar(&p.DownloadLinkPrefix, "link.prefix", "http", "prepending stuff for download link")
+
+	showVersion := flag.Bool("version", false, "Show version")
+
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version.Print(os.Args[0]))
+	}
 
 	if os.Getenv("S3_ENDPOINT") != "" {
 		p.S3Endpoint = os.Getenv("S3_ENDPOINT")
@@ -164,7 +172,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	sentry.Init(sentry.ClientOptions{})
+	sentry.Init(sentry.ClientOptions{
+		Release: version.Revision,
+	})
 	sentryHandler := sentryhttp.New(sentryhttp.Options{})
 
 	applicationRouter := mux.NewRouter()

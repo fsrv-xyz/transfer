@@ -5,6 +5,27 @@ stages:
 
 build:
   stage: build
+  image: golang:latest
+  variables:
+    - CGO_ENABLED=0
+    - GOOS=linux
+    - GOARCH=amd64
+  script:
+    - |
+      go build -o app -ldflags "-s -w \
+        -X github.com/fsrv-xyz/version.Version=${CI_JOB_ID} \
+        -X github.com/fsrv-xyz/version.Revision="${CI_COMMIT_SHORT_SHA}" \
+        -X github.com/fsrv-xyz/version.Branch="${CI_COMMIT_REF_NAME}" \
+        -X github.com/fsrv-xyz/version.BuildUser=${CI_REGISTRY_USER} \
+        -X github.com/fsrv-xyz/version.BuildDate=$(date +%F_%H-%M)"
+  artifacts:
+    paths:
+      - app
+    when:
+      - on_success
+
+container-build:
+  stage: deploy
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
