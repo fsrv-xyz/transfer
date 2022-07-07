@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	sentryhttp "github.com/getsentry/sentry-go/http"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
