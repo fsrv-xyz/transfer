@@ -5,6 +5,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"io"
 	"net/http"
 	"net/url"
@@ -44,6 +45,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
+		sentry.CaptureMessage(fmt.Sprintf("%s: %s", err.Error(), r.URL.String()))
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		traceLog(c.logger, err)
 		return

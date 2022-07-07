@@ -163,14 +163,6 @@ func main() {
 	var c = Config{}
 	var err error
 
-	sentryInitError := sentry.Init(sentry.ClientOptions{
-		Release:          version.Revision,
-		TracesSampleRate: 1.0,
-		Dsn:              "https://1035f538c39a4a6086399ceb2d7b6581@sentry.fsrv.services/3",
-	})
-	log.Println(sentryInitError)
-	sentryHandler := sentryhttp.New(sentryhttp.Options{})
-
 	c.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
 	c.minioClient, err = minio.New(p.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(p.S3AccessKey, p.S3SecretKey, ""),
@@ -180,6 +172,15 @@ func main() {
 		c.logger.Println(err)
 		os.Exit(1)
 	}
+
+	sentryInitError := sentry.Init(sentry.ClientOptions{
+		Release:          version.Revision,
+		TracesSampleRate: 1.0,
+	})
+	log.Println(sentryInitError)
+	sentryHandler := sentryhttp.New(sentryhttp.Options{
+		WaitForDelivery: false,
+	})
 
 	applicationRouter := mux.NewRouter()
 	applicationRouter.Use(sentryHandler.Handle)
