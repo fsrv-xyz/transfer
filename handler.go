@@ -42,14 +42,19 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	statSpan := sentry.StartSpan(r.Context(), "object.stat")
+
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
 		sentry.CaptureMessage(fmt.Sprintf("%s: %s", err.Error(), r.URL.String()))
+		statSpan.Finish()
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		traceLog(c.logger, err)
 		return
 	}
+
+	statSpan.Finish()
 
 	// only return checksum when called in sum mode
 	if sumMode {
@@ -65,15 +70,20 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(object.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 
+	objectGetSpan := sentry.StartSpan(r.Context(), "object.get")
 	reader, err := c.minioClient.GetObject(r.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
 	if err != nil {
+		objectGetSpan.Finish()
 		traceLog(c.logger, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	objectGetSpan.Finish()
 
 	metricObjectAction.With(prometheus.Labels{"action": "download"}).Inc()
 
+	objectCopySpan := sentry.StartSpan(r.Context(), "object.copy")
+	defer objectCopySpan.Finish()
 	if _, copyError := io.Copy(w, reader); err != nil {
 		traceLog(c.logger, copyError)
 		w.WriteHeader(http.StatusInternalServerError)
