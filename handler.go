@@ -27,6 +27,9 @@ func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
+	handlerMainSpan := sentry.StartSpan(r.Context(), "handler.download")
+	defer handlerMainSpan.Finish()
+
 	vars := mux.Vars(r)
 	// check if handler is called with /.../.../sum
 	_, sumMode := vars["sum"]
@@ -42,18 +45,23 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statSpan := sentry.StartSpan(r.Context(), "object.stat")
+	statSpan := handlerMainSpan.StartChild("object.stat")
 
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
+		switch minio.ToErrorResponse(err).StatusCode {
+		case http.StatusNotFound:
+			statSpan.Status = sentry.SpanStatusNotFound
+		default:
+			statSpan.Status = sentry.SpanStatusInternalError
+		}
 		sentry.CaptureMessage(fmt.Sprintf("%s: %s", err.Error(), r.URL.String()))
 		statSpan.Finish()
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		traceLog(c.logger, err)
 		return
 	}
-
 	statSpan.Finish()
 
 	// only return checksum when called in sum mode
@@ -61,6 +69,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		metricObjectAction.With(prometheus.Labels{"action": "sum"}).Inc()
 		_, httpResponseError := fmt.Fprintf(w, "%s  %s\n", object.UserMetadata[ChecksumMetadataFieldName], filename)
 		if httpResponseError != nil {
+			sentry.CaptureMessage(fmt.Sprintf("%s: %s", err.Error(), r.URL.String()))
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
@@ -70,9 +79,10 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(object.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 
-	objectGetSpan := sentry.StartSpan(r.Context(), "object.get")
+	objectGetSpan := handlerMainSpan.StartChild("object.get")
 	reader, err := c.minioClient.GetObject(r.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
 	if err != nil {
+		objectGetSpan.Status = sentry.SpanStatusInternalError
 		objectGetSpan.Finish()
 		traceLog(c.logger, err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -82,9 +92,11 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	metricObjectAction.With(prometheus.Labels{"action": "download"}).Inc()
 
-	objectCopySpan := sentry.StartSpan(r.Context(), "object.copy")
+	objectCopySpan := handlerMainSpan.StartChild("object.copy")
 	defer objectCopySpan.Finish()
 	if _, copyError := io.Copy(w, reader); err != nil {
+		objectCopySpan.Status = sentry.SpanStatusInternalError
+		objectCopySpan.Finish()
 		traceLog(c.logger, copyError)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
