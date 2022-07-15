@@ -37,6 +37,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	id, idOK := vars["id"]
 	filename, filenameOK := vars["filename"]
 	if !idOK || !filenameOK {
+		sentry.CaptureException(fmt.Errorf("id or filename not provided"))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -104,6 +105,9 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
+	handlerMainSpan := sentry.StartSpan(r.Context(), "handler.upload")
+	defer handlerMainSpan.Finish()
+
 	vars := mux.Vars(r)
 	filename, ok := vars["filename"]
 	filename = url.QueryEscape(filename)
@@ -117,6 +121,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.ContentLength > p.UploadLimitGB*GB {
+		sentry.CaptureMessage("upload too large")
 		w.WriteHeader(http.StatusNotAcceptable)
 		return
 	}
@@ -127,22 +132,32 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	buf := &bytes.Buffer{}
 	tee := io.TeeReader(r.Body, buf)
 
+	copySpan := handlerMainSpan.StartChild("object.put")
+
 	written, err := io.CopyN(sha512SumGenerator, tee, r.ContentLength)
 	if written != r.ContentLength {
 		traceLog(c.logger, err)
+		sentry.CaptureException(err)
+		copySpan.Status = sentry.SpanStatusInternalError
+		copySpan.Finish()
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	metadata[ChecksumMetadataFieldName] = hex.EncodeToString(sha512SumGenerator.Sum(nil))
+	copySpan.Finish()
 
+	objectForwardSpan := handlerMainSpan.StartChild("object.put")
 	id := uuid.New()
 	_, err = c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, buf, r.ContentLength, minio.PutObjectOptions{
 		ContentType:  selectContentType(filename),
 		UserMetadata: metadata,
 	})
+	objectForwardSpan.Finish()
 
 	if err != nil {
 		traceLog(c.logger, err)
+		sentry.CaptureException(err)
+		objectForwardSpan.Status = sentry.SpanStatusInternalError
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		return
 	}
