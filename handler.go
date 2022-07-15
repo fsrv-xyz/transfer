@@ -132,7 +132,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	buf := &bytes.Buffer{}
 	tee := io.TeeReader(r.Body, buf)
 
-	copySpan := handlerMainSpan.StartChild("object.put")
+	copySpan := handlerMainSpan.StartChild("object.copy")
 
 	written, err := io.CopyN(sha512SumGenerator, tee, r.ContentLength)
 	if written != r.ContentLength {
