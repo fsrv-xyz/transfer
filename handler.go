@@ -28,7 +28,9 @@ func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
 
 func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	handlerMainSpan := sentry.StartSpan(r.Context(), "handler.download")
-	defer handlerMainSpan.Finish()
+	defer handlerMainSpan.Finish() 
+
+	runRootSpan.Data["host"] = "this is a test"
 
 	vars := mux.Vars(r)
 	// check if handler is called with /.../.../sum
