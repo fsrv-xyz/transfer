@@ -28,6 +28,7 @@ func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
 
 func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	handlerMainSpan := sentry.StartSpan(r.Context(), "handler.download")
+	handlerMainSpan.Status = sentry.SpanStatusOK
 	defer handlerMainSpan.Finish()
 
 	vars := mux.Vars(r)
