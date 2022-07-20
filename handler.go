@@ -51,9 +51,6 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
-	statSpan.Data = map[string]interface{}{
-		"object": object,
-	}
 	if err != nil {
 		switch minio.ToErrorResponse(err).StatusCode {
 		case http.StatusNotFound:
@@ -61,11 +58,14 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		default:
 			statSpan.Status = sentry.SpanStatusInternalError
 		}
-		sentry.CaptureMessage(fmt.Sprintf("%s: %s", err.Error(), r.URL.String()))
+		sentry.CaptureException(fmt.Errorf("%s: %s", err.Error(), r.URL.String()))
 		statSpan.Finish()
 		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
 		traceLog(c.logger, err)
 		return
+	}
+	statSpan.Data = map[string]interface{}{
+		"object": object,
 	}
 	statSpan.Finish()
 
