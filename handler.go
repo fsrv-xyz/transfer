@@ -51,6 +51,9 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
+	statSpan.Data = map[string]interface{}{
+		"object": object,
+	}
 	if err != nil {
 		switch minio.ToErrorResponse(err).StatusCode {
 		case http.StatusNotFound:
