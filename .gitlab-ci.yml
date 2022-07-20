@@ -1,10 +1,6 @@
 ---
-stages:
-  - build
-  - deploy
 
 build:
-  stage: build
   image: golang
   variables:
     CGO_ENABLED: 0
@@ -23,10 +19,13 @@ build:
       - app
 
 container-build:
-  stage: deploy
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
+  needs:
+    - build
+  dependencies:
+    - build
   script:
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"${REGISTRY_SERVER}\":{\"auth\":\"$(printf "%s:%s" "${REGISTRY_USERNAME}" "${REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
@@ -36,3 +35,13 @@ container-build:
       --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
       --destination "${REGISTRY_SERVER}/${CI_PROJECT_NAME}:${CI_COMMIT_SHORT_SHA}"
       --destination "${REGISTRY_SERVER}/${CI_PROJECT_NAME}:latest"
+
+rollout:
+  variables:
+    UPDATE_IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
+    UPDATE_IMAGE_NAME: "${REGISTRY_SERVER}/${CI_PROJECT_NAME}"
+  needs:
+    - container-build
+  trigger:
+    project: "fsrvcorp/deploy/transfer-service-deploy"
+    branch: master
