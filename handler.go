@@ -48,6 +48,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statSpan := handlerMainSpan.StartChild("object.stat")
+	statSpan.Status = sentry.SpanStatusOK
 
 	filePath := fmt.Sprintf("%s/%s", id, filename)
 	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
