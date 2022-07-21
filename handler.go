@@ -28,8 +28,10 @@ func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
 
 func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	handlerMainSpan := sentry.StartSpan(r.Context(), "handler.download")
-	handlerMainSpan.Status = sentry.SpanStatusOK
 	defer handlerMainSpan.Finish()
+
+	transaction := sentry.TransactionFromContext(r.Context())
+	transaction.Status = sentry.SpanStatusOK
 
 	vars := mux.Vars(r)
 	// check if handler is called with /.../.../sum
@@ -56,8 +58,10 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		switch minio.ToErrorResponse(err).StatusCode {
 		case http.StatusNotFound:
 			statSpan.Status = sentry.SpanStatusNotFound
+			transaction.Status = sentry.SpanStatusNotFound
 		default:
 			statSpan.Status = sentry.SpanStatusInternalError
+			transaction.Status = sentry.SpanStatusInternalError
 		}
 		sentry.CaptureException(fmt.Errorf("%s: %s", err.Error(), r.URL.String()))
 		statSpan.Finish()
