@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/minio/minio-go/v7"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -63,11 +64,15 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- interface{}) {
 					break
 				}
 				if object.LastModified.Add(1 * time.Hour).Before(time.Now()) {
+					cleanupSpecificSpan := sentry.StartSpan(context.Background(), fmt.Sprintf("cleanup %+q", object.Key))
+					cleanupSpecificSpan.SetTag("object.key", object.Key)
 					traceLog(c.logger, "remove "+object.Key)
 					metricObjectAction.With(prometheus.Labels{"action": "delete"}).Inc()
 					if err := c.minioClient.RemoveObject(ctx, p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
+						sentry.CaptureException(err)
 						traceLog(c.logger, err)
 					}
+					cleanupSpecificSpan.Finish()
 				}
 			}
 			sleepCounter = 0
