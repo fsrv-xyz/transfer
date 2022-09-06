@@ -1,5 +1,4 @@
 ---
-
 build:
   image: golang
   variables:
@@ -22,6 +21,8 @@ container-build:
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [""]
+  only:
+    - tags
   needs:
     - build
   dependencies:
