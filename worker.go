@@ -58,21 +58,30 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- interface{}) {
 			if backendState != StateHealthy {
 				traceLog(c.logger, "skip cleanup because of unhealthy backend")
 			}
+
 			for object := range c.minioClient.ListObjects(ctx, p.S3BucketName, minio.ListObjectsOptions{Recursive: true}) {
 				if object.Key == "" {
 					traceLog(c.logger, fmt.Sprintf("object has empty key %#v\n", object))
 					break
 				}
 				if object.LastModified.Add(1 * time.Hour).Before(time.Now()) {
-					cleanupSpecificSpan := sentry.StartSpan(context.Background(), fmt.Sprintf("cleanup %+q", object.Key))
-					cleanupSpecificSpan.SetTag("object.key", object.Key)
+					sentryCleanupSpan := sentry.StartSpan(
+						context.Background(),
+						"object.cleanup",
+						sentry.TransactionName(fmt.Sprintf("cleanup %+q", object.Key)),
+					)
+					sentryCleanupSpan.SetTag("object.key", object.Key)
+
 					traceLog(c.logger, "remove "+object.Key)
 					metricObjectAction.With(prometheus.Labels{"action": "delete"}).Inc()
 					if err := c.minioClient.RemoveObject(ctx, p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
+						sentryCleanupSpan.Status = sentry.SpanStatusInternalError
 						sentry.CaptureException(err)
 						traceLog(c.logger, err)
+					} else {
+						sentryCleanupSpan.Status = sentry.SpanStatusOK
 					}
-					cleanupSpecificSpan.Finish()
+					sentryCleanupSpan.Finish()
 				}
 			}
 			sleepCounter = 0
