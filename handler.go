@@ -5,12 +5,12 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
-	"github.com/getsentry/sentry-go"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7"
@@ -174,8 +174,13 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	metricObjectSize.Observe(float64(r.ContentLength))
 	metricObjectAction.With(prometheus.Labels{"action": "upload"}).Inc()
 
+	downloadLink := fmt.Sprintf("%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, id.String(), filename)
+
 	// generate download link
-	_, downloadLinkResponseError := fmt.Fprintf(w, "%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, id.String(), filename)
+	_, downloadLinkResponseError := fmt.Fprintf(w, downloadLink)
+	handlerMainSpan.Data = map[string]interface{}{
+		"download_link": downloadLink,
+	}
 	if downloadLinkResponseError != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
