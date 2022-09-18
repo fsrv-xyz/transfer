@@ -54,3 +54,11 @@ semantic_release:
     - VERSION="$(get-next-version -f json | jq -r 'select(.hasNextVersion==true) | .version')"
     - echo $VERSION
     - test -z "$VERSION" || curl --silent --request POST --header "PRIVATE-TOKEN:${CI_BOT_TOKEN}" "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/repository/tags?tag_name=${VERSION}&ref=${CI_DEFAULT_BRANCH}" | jq
+
+
+trigger dimp:
+  trigger: fsrvcorp/misc/dimp
+  variables:
+    DIMP_PROJECT_ID: $CI_PROJECT_ID
+  only:
+    - schedules
