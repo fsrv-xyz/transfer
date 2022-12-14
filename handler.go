@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/bonsai-oss/mux"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7"
 	"github.com/prometheus/client_golang/prometheus"
 )

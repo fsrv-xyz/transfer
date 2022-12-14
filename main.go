@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bonsai-oss/mux"
 	"github.com/fsrv-xyz/version"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
-	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/prometheus/client_golang/prometheus"
