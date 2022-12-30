@@ -9,7 +9,7 @@ require (
 	github.com/getsentry/sentry-go v0.16.0
 	github.com/google/uuid v1.3.0
 	github.com/klauspost/compress v1.15.13 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.2 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.3 // indirect
 	github.com/minio/minio-go/v7 v7.0.45
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.39.0 // indirect
