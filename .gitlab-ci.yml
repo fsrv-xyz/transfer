@@ -1,8 +1,9 @@
 ---
 stages:
   - test
-  - release
   - build
+  - review
+  - release
 
 .go_template_defaults:
   stage: test
@@ -11,14 +12,18 @@ stages:
 include:
   - remote: https://gitlab.com/bonsai-oss/organization/ci-templates/-/raw/main/templates/language/go.yml
   - remote: https://gitlab.com/bonsai-oss/organization/ci-templates/-/raw/main/templates/release/semver.yml
+  - project: fsrvcorp/ci-templates
+    file:
+      - kubernetes-review.yaml
+
+variables:
+  KUBE_BASE_DIR: "${CI_PROJECT_DIR}/example/kubernetes"
 
 build:
   stage: build
   image:
     name: gcr.io/kaniko-project/executor:debug
     entrypoint: [ "" ]
-  rules:
-    - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
     - mkdir -p /kaniko/.docker
     - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
@@ -31,3 +36,11 @@ build:
       --destination "${CI_REGISTRY_IMAGE}:latest"
       --build-arg "CI_JOB_ID=${CI_JOB_ID}"
       --build-arg "CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}"
+
+review::start:
+  stage: review
+  needs:
+    - job: build
+      artifacts: false
+review::stop:
+  stage: review

@@ -1,0 +1,71 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  labels:
+    app: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      volumes:
+        - name: data
+          emptyDir: {}
+      initContainers:
+        - name: create-bucket
+          volumeMounts:
+            - mountPath: /data
+              name: data
+          image: alpine:latest
+          command:
+            - mkdir
+          args:
+            - -p
+            - /data/transfer
+      containers:
+        - name: minio
+          image: quay.io/minio/minio:latest
+          command:
+            - minio
+          args:
+            - server
+            - --console-address
+            - 0.0.0.0:9001
+            - /data
+          env:
+            - name: MINIO_ROOT_USER
+              value: "minio"
+            - name: MINIO_ROOT_PASSWORD
+              value: "minio123"
+          ports:
+            - containerPort: 9000
+              name: api
+            - containerPort: 9001
+              name: console
+          volumeMounts:
+            - mountPath: /data
+              name: data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  clusterIP: None
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: api
+    - name: console
+      port: 9001
+      targetPort: console
