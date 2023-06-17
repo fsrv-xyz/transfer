@@ -51,7 +51,5 @@ integration test:
     - job: review::start
       artifacts: true
   image: debian:bullseye-slim
-  before_script:
-    - apt update -y -qq && apt install -y -qq curl
   script:
     - bash .it/test.sh
