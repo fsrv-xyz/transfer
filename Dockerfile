@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.19 AS builder
+FROM golang:1.20@sha256:6b3fa4b908676231b50acbbc00e84d8cee9c6ce072b1175c0ff352c57d8a612f AS builder
 ARG CI_JOB_ID
 ARG CI_COMMIT_SHORT_SHA
 WORKDIR /build
