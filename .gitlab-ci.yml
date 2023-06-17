@@ -17,7 +17,7 @@ include:
       - kubernetes-review.yaml
 
 variables:
-  KUBE_BASE_DIR: "${CI_PROJECT_DIR}/example/kubernetes"
+  KUBE_BASE_DIR: "${CI_PROJECT_DIR}/.it/kubernetes"
 
 build:
   stage: build
@@ -44,3 +44,14 @@ review::start:
       artifacts: false
 review::stop:
   stage: review
+
+integration test:
+  stage: review
+  needs:
+    - job: review::start
+      artifacts: true
+  image: debian:bullseye-slim
+  before_script:
+    - apt update -y -qq && apt install -y -qq curl
+  script:
+    - bash .it/test.sh
