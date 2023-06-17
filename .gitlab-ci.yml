@@ -50,6 +50,6 @@ integration test:
   needs:
     - job: review::start
       artifacts: true
-  image: debian:bullseye-slim
+  image: debian:bullseye-slim@sha256:924df86f8aad741a0134b2de7d8e70c5c6863f839caadef62609c1be1340daf5
   script:
     - bash .it/test.sh

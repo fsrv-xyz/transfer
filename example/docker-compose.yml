@@ -17,7 +17,7 @@ services:
       retries: 3
 
   transfer:
-    image: fsrv/transfer
+    image: fsrv/transfer@sha256:3954c1425f289288b4b868ed339f9964e64b3454dd40781a73ff5f5ad51dddf3
     hostname: transfer
     ports:
       - "8080:8080"
