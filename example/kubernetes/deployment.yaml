@@ -1,0 +1,41 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${CI_PROJECT_NAME}
+  labels:
+    app: ${CI_PROJECT_NAME}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${CI_PROJECT_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${CI_PROJECT_NAME}
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+        - name: transfer
+          image: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}
+          command:
+            - /app/transfer
+          args:
+            - -link.prefix
+            - https
+          ports:
+            - containerPort: 8080
+              name: api
+          env:
+            - name: S3_ENDPOINT
+              value: "minio:9000"
+            - name: AWS_ACCESS_KEY_ID
+              value: "minio"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "minio123"
+            - name: S3_BUCKET
+              value: "transfer"
+            - name: S3_SECURE
+              value: "false"
