@@ -50,6 +50,15 @@ integration test:
   needs:
     - job: review::start
       artifacts: true
-  image: debian:bullseye-slim@sha256:924df86f8aad741a0134b2de7d8e70c5c6863f839caadef62609c1be1340daf5
+  image: debian:sid
+  variables:
+    TERM: "xterm-256color"
+  before_script:
+    - apt-get update >/dev/null && apt-get install -y bats curl >/dev/null
+    - mkdir -p reports
   script:
-    - bash .it/test.sh
+    - bats --formatter tap13 --report-formatter junit ./.it/*.bats --output reports/ -T
+  artifacts:
+    when: always
+    reports:
+      junit: reports/*.xml
