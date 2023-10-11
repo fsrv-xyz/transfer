@@ -120,6 +120,7 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	filename, ok := vars["filename"]
 	filename = url.QueryEscape(filename)
+	filename = onlyAllowedCharacters(filename)
 
 	if cancelRequestIfUnhealthy(w) {
 		return
