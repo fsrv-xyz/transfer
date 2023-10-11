@@ -50,7 +50,7 @@ integration test:
   needs:
     - job: review::start
       artifacts: true
-  image: debian:sid@sha256:10bf2efd490bed1902f5ac1e1e21dff55cacb3c038a34bac6cea5256c8493673
+  image: debian:sid@sha256:255acb3b53f3ddd0c3c94d6d08b563779936b4ecbace705bb4580fb636ff30c8
   variables:
     TERM: "xterm-256color"
   before_script:
