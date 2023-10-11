@@ -5,6 +5,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"regexp"
 	"runtime"
 	"time"
 
@@ -60,4 +61,9 @@ func traceLog(logger *log.Logger, msg interface{}) {
 	if ok && details != nil {
 		logger.Printf("%v @ %v:%d | %v", details.Name(), path.Base(file), line, msg)
 	}
+}
+
+func onlyAllowedCharacters(s string) string {
+	gex := regexp.MustCompile(`[^a-zA-Z.0-9_-]`)
+	return gex.ReplaceAllString(s, "")
 }
