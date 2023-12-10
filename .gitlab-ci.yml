@@ -45,20 +45,20 @@ review::start:
 review::stop:
   stage: review
 
-integration test:
+Integration Tests:
+  image: debian:stable-slim
   stage: review
   needs:
     - job: review::start
       artifacts: true
-  image: debian:sid@sha256:fa18eda6ea249fb990480b808065cafd6e7bda87d8ce65f2418f92c77f046bea
   variables:
-    TERM: "xterm-256color"
+    TESTFMT_VERSION: 1.0.2
   before_script:
-    - apt-get update >/dev/null && apt-get install -y bats curl >/dev/null
-    - mkdir -p reports
+    - (apt update && apt install -y curl wget) > /dev/null
+    - wget -q "https://github.com/bonsai-oss/testfmt/releases/download/v${TESTFMT_VERSION}/testfmt_${TESTFMT_VERSION}_linux_amd64" -O testfmt && chmod +x testfmt
   script:
-    - bats --formatter tap13 --report-formatter junit ./.it/*.bats --output reports/ -T
+    - ./testfmt -f junit -o test-results.xml -d ./.it
   artifacts:
-    when: always
     reports:
-      junit: reports/*.xml
+      junit: test-results.xml
+    when: always
