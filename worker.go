@@ -8,6 +8,8 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/minio/minio-go/v7"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"transfer/internal/metrics"
 )
 
 // HealthCheckWorker - Worker for checking health of s3 backend
@@ -68,13 +70,13 @@ func (c *Config) CleanupWorker(ctx context.Context, done chan<- interface{}) {
 					sentryCleanupSpan := sentry.StartSpan(
 						context.Background(),
 						"object.cleanup",
-						sentry.TransactionName(fmt.Sprintf("cleanup %+q", object.Key)),
+						sentry.WithTransactionName(fmt.Sprintf("cleanup %+q", object.Key)),
 					)
 					sentryCleanupSpan.SetTag("object.key", object.Key)
 
 					traceLog(c.logger, "remove "+object.Key)
-					metricObjectAction.With(prometheus.Labels{"action": "delete"}).Inc()
-					if err := c.minioClient.RemoveObject(ctx, p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
+					metrics.ObjectAction.With(prometheus.Labels{"action": "delete"}).Inc()
+					if err := c.minioClient.RemoveObject(sentryCleanupSpan.Context(), p.S3BucketName, object.Key, minio.RemoveObjectOptions{}); err != nil {
 						sentryCleanupSpan.Status = sentry.SpanStatusInternalError
 						sentry.CaptureException(err)
 						traceLog(c.logger, err)

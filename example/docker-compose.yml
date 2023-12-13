@@ -2,7 +2,7 @@
 version: '3.7'
 services:
   minio:
-    image: quay.io/minio/minio:RELEASE.2021-11-09T03-21-45Z
+    image: quay.io/minio/minio:latest
     command: server --console-address ":9001" /data
     hostname: minio
     environment:
@@ -17,7 +17,10 @@ services:
       retries: 3
 
   transfer:
-    image: fsrv/transfer@sha256:3954c1425f289288b4b868ed339f9964e64b3454dd40781a73ff5f5ad51dddf3
+    build: ../
     hostname: transfer
+    environment:
+      S3_SECURE: 'false'
     ports:
       - "8080:8080"
+      - "8081:8081"

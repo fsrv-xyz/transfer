@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-declare -r URL="https://${DEFAULT_INGRESS_URL}"
+declare URL="${DEFAULT_INGRESS_URL}"
 
 function generate_test_file() {
   local -r file_name="$1"
