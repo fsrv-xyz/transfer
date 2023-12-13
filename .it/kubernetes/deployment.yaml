@@ -23,7 +23,7 @@ spec:
           command:
             - /app/transfer
           args:
-            - -link.prefix
+            - --link.prefix
             - https
           ports:
             - containerPort: 8080

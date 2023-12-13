@@ -1,3 +1,6 @@
 /.idea
 /transfer
 /coverage
+/example/data/transfer
+!/example/data/transfer/.gitkeep
+/example/data/.minio.sys

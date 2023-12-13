@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
@@ -15,6 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"transfer/internal/metrics"
 )
 
 func (c *Config) HealthCheckHandler(w http.ResponseWriter, _ *http.Request) {
@@ -53,7 +54,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	statSpan.Status = sentry.SpanStatusOK
 
 	filePath := fmt.Sprintf("%s/%s", id, filename)
-	object, err := c.minioClient.StatObject(r.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
+	object, err := c.minioClient.StatObject(statSpan.Context(), p.S3BucketName, filePath, minio.StatObjectOptions{})
 	if err != nil {
 		switch minio.ToErrorResponse(err).StatusCode {
 		case http.StatusNotFound:
@@ -76,7 +77,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// only return checksum when called in sum mode
 	if sumMode {
-		metricObjectAction.With(prometheus.Labels{"action": "sum"}).Inc()
+		metrics.ObjectAction.With(prometheus.Labels{metrics.LabelAction: "sum"}).Inc()
 		_, httpResponseError := fmt.Fprintf(w, "%s  %s\n", object.UserMetadata[ChecksumMetadataFieldName], filename)
 		if httpResponseError != nil {
 			sentry.CaptureMessage(fmt.Sprintf("%s: %s", err.Error(), r.URL.String()))
@@ -90,7 +91,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 
 	objectGetSpan := handlerMainSpan.StartChild("object.get")
-	reader, err := c.minioClient.GetObject(r.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
+	reader, err := c.minioClient.GetObject(objectGetSpan.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
 	if err != nil {
 		objectGetSpan.Status = sentry.SpanStatusInternalError
 		objectGetSpan.Finish()
@@ -100,7 +101,7 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	objectGetSpan.Finish()
 
-	metricObjectAction.With(prometheus.Labels{"action": "download"}).Inc()
+	metrics.ObjectAction.With(prometheus.Labels{metrics.LabelAction: "download"}).Inc()
 
 	objectCopySpan := handlerMainSpan.StartChild("object.copy")
 	defer objectCopySpan.Finish()
@@ -127,58 +128,73 @@ func (c *Config) UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ok || filename == "" {
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "filename not provided", http.StatusBadRequest)
 		return
 	}
-	if r.ContentLength > p.UploadLimitGB*GB {
+	if r.ContentLength > p.UploadLimitGB*metrics.GB {
 		sentry.CaptureMessage("upload too large")
-		w.WriteHeader(http.StatusNotAcceptable)
+		http.Error(w, "upload too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
 	metadata := make(map[string]string)
 	sha512SumGenerator := sha512.New()
 
-	buf := &bytes.Buffer{}
-	tee := io.TeeReader(r.Body, buf)
+	pipeReader, pipeWriter := io.Pipe()
+	multiWriter := io.MultiWriter(sha512SumGenerator, pipeWriter)
 
-	copySpan := handlerMainSpan.StartChild("object.copy")
-
-	written, err := io.CopyN(sha512SumGenerator, tee, r.ContentLength)
-	if written != r.ContentLength {
-		traceLog(c.logger, err)
-		sentry.CaptureException(err)
-		copySpan.Status = sentry.SpanStatusInternalError
-		copySpan.Finish()
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	metadata[ChecksumMetadataFieldName] = hex.EncodeToString(sha512SumGenerator.Sum(nil))
-	copySpan.Finish()
+	go func() {
+		copySpan := handlerMainSpan.StartChild("object.copy")
+		defer copySpan.Finish()
+		_, err := io.CopyN(multiWriter, r.Body, r.ContentLength)
+		pipeWriter.CloseWithError(err)
+	}()
 
 	objectForwardSpan := handlerMainSpan.StartChild("object.put")
-	id := uuid.New()
-	_, err = c.minioClient.PutObject(r.Context(), p.S3BucketName, id.String()+"/"+filename, buf, r.ContentLength, minio.PutObjectOptions{
-		ContentType:  selectContentType(filename),
-		UserMetadata: metadata,
-	})
-	objectForwardSpan.Finish()
 
-	if err != nil {
-		traceLog(c.logger, err)
-		sentry.CaptureException(err)
+	prefixId := uuid.NewString()
+
+	uploadedObject, uploadError := c.minioClient.PutObject(objectForwardSpan.Context(), p.S3BucketName, prefixId+"/"+filename, pipeReader, r.ContentLength, minio.PutObjectOptions{
+		ContentType: selectContentType(filename),
+	})
+
+	if uploadError != nil {
+		traceLog(c.logger, uploadError)
+		sentry.CaptureException(uploadError)
 		objectForwardSpan.Status = sentry.SpanStatusInternalError
-		w.WriteHeader(minio.ToErrorResponse(err).StatusCode)
+		w.WriteHeader(minio.ToErrorResponse(uploadError).StatusCode)
 		return
 	}
 
-	metricObjectSize.Observe(float64(r.ContentLength))
-	metricObjectAction.With(prometheus.Labels{"action": "upload"}).Inc()
+	metadata[ChecksumMetadataFieldName] = hex.EncodeToString(sha512SumGenerator.Sum(nil))
+	objectMetadataSpan := handlerMainSpan.StartChild("object.put.metadata")
+	_, copyError := c.minioClient.CopyObject(objectMetadataSpan.Context(), minio.CopyDestOptions{
+		Bucket:          p.S3BucketName,
+		Object:          uploadedObject.Key,
+		UserMetadata:    metadata,
+		ReplaceMetadata: true,
+	}, minio.CopySrcOptions{
+		Bucket: uploadedObject.Bucket,
+		Object: uploadedObject.Key,
+	})
+	objectMetadataSpan.Finish()
+	if copyError != nil {
+		traceLog(c.logger, copyError)
+		sentry.CaptureException(copyError)
+		objectForwardSpan.Status = sentry.SpanStatusInternalError
+		w.WriteHeader(minio.ToErrorResponse(copyError).StatusCode)
+		return
+	}
 
-	downloadLink := fmt.Sprintf("%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, id.String(), filename)
+	objectForwardSpan.Finish()
+
+	metrics.ObjectSize.Observe(float64(r.ContentLength))
+	metrics.ObjectAction.With(prometheus.Labels{metrics.LabelAction: "upload"}).Inc()
+
+	downloadLink := fmt.Sprintf("%s://%s/%s/%s\n", p.DownloadLinkPrefix, r.Host, prefixId, filename)
 
 	// generate download link
-	_, downloadLinkResponseError := fmt.Fprintf(w, downloadLink)
+	_, downloadLinkResponseError := fmt.Fprint(w, downloadLink)
 	handlerMainSpan.Data = map[string]interface{}{
 		"download_link": downloadLink,
 	}

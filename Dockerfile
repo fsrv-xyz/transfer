@@ -21,4 +21,4 @@ ENV AWS_ACCESS_KEY_ID="minio"
 ENV AWS_SECRET_ACCESS_KEY="minio123"
 COPY --from=builder /build/transfer /app/transfer
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-CMD ["/app/transfer", "-web.listen-address", ":8080", "-metrics.listen-address", ":8081"]
+CMD ["/app/transfer", "--web.listen-address", ":8080", "--metrics.listen-address", ":8081"]

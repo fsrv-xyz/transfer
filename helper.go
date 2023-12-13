@@ -7,29 +7,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
-	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
-
-// apiMiddleware - logging and metrics for api endpoints
-func apiMiddleware(handler http.HandlerFunc, logger *log.Logger, endpointName string) http.HandlerFunc {
-	if logger == nil {
-		logger = log.Default()
-	}
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		metricEndpointRequests.With(prometheus.Labels{"endpoint": endpointName}).Inc()
-		start := time.Now()
-
-		// serve http request
-		handler.ServeHTTP(w, r)
-		duration := time.Since(start)
-		metricOperationDuration.With(prometheus.Labels{"endpoint": endpointName}).Observe(duration.Seconds())
-
-		logger.Printf("%v %v %v", r.Method, r.RequestURI, duration)
-	}
-	return fn
-}
 
 // selectContentType - parse file extension and determine content type
 func selectContentType(filename string) string {

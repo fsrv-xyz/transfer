@@ -2,36 +2,30 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/bonsai-oss/mux"
 	"github.com/fsrv-xyz/version"
 	"github.com/getsentry/sentry-go"
 	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"transfer/internal/metrics"
 )
 
 // ChecksumMetadataFieldName - UserMetadata key for storing the checksum of the file
 const ChecksumMetadataFieldName = "Sha512sum"
-
-const (
-	_  = iota
-	KB = 1 << (10 * iota)
-	MB
-	GB
-)
 
 type State string
 
@@ -41,32 +35,6 @@ const (
 )
 
 var (
-	metricObjectAction = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "transfer",
-		Name:      "object_action",
-		Help:      "Actions applied to objects",
-	}, []string{"action"})
-
-	metricEndpointRequests = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "transfer",
-		Name:      "endpoint_requests",
-		Help:      "HTTP endpoint requests",
-	}, []string{"endpoint"})
-
-	metricObjectSize = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "transfer",
-		Name:      "object_size_bytes",
-		Help:      "Uploaded objects by size",
-		Buckets:   []float64{1 * KB, 10 * KB, 100 * KB, 1 * MB, 10 * MB, 100 * MB, 300 * MB, 600 * MB, 900 * MB},
-	})
-
-	metricOperationDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "transfer",
-		Name:      "operation_duration",
-		Help:      "duration per endpoint",
-		Buckets:   []float64{0.01, 0.05, 0.1, 0.2, 0.4, 1, 2, 4, 8, 10, 20},
-	}, []string{"endpoint"})
-
 	// declare initial state as unhealthy
 	backendState = StateUnhealthy
 )
@@ -100,54 +68,32 @@ func init() {
 		return
 	}
 
-	flag.StringVar(&p.ListenAddress, "web.listen-address", ":8080", "web server listen address")
-	flag.StringVar(&p.MetricsListenAddress, "metrics.listen-address", "127.0.0.1:9042", "metrics endpoint listen address")
-	flag.Int64Var(&p.UploadLimitGB, "upload.limit", 2, "Upload limit in GiB")
-	flag.IntVar(&p.CleanupInterval, "cleanup.interval", 60, "interval in seconds for cleanup")
-	flag.IntVar(&p.HealthCheckInterval, "healthcheck.interval", 2, "interval in seconds for healthcheck")
-	flag.DurationVar(&p.HealthCheckReturnGap, "healthcheck.return.gap", 2*time.Second, "time in seconds for declaring the service as healthy after successful check")
-	flag.StringVar(&p.S3Endpoint, "s3.endpoint", "", "address to s3 endpoint")
-	flag.StringVar(&p.S3AccessKey, "s3.access", "", "s3 access key")
-	flag.StringVar(&p.S3SecretKey, "s3.secret", "", "s3 secret key")
-	flag.StringVar(&p.S3BucketName, "s3.bucket", "", "s3 storage bucket")
-	flag.BoolVar(&p.S3UseSecurity, "s3.secure", true, "use tls for connection")
-	flag.BoolVar(&p.DisableCleanupWorker, "cleanup.disable", false, "manage object deletion process")
-	flag.StringVar(&p.DownloadLinkPrefix, "link.prefix", "http", "prepending stuff for download link")
+	app := kingpin.New("transfer", "Daemon transferring files to s3 compatible storage")
+	app.Flag("web.listen-address", "web server listen address").Default(":8080").StringVar(&p.ListenAddress)
+	app.Flag("metrics.listen-address", "metrics endpoint listen address").Default("127.0.0.1:9042").StringVar(&p.MetricsListenAddress)
+	app.Flag("upload.limit", "Upload limit in GiB").Default("2").Int64Var(&p.UploadLimitGB)
+	app.Flag("cleanup.interval", "interval in seconds for cleanup").Default("60").IntVar(&p.CleanupInterval)
+	app.Flag("healthcheck.interval", "interval in seconds for healthcheck").Default("2").IntVar(&p.HealthCheckInterval)
+	app.Flag("healthcheck.return.gap", "time in seconds for declaring the service as healthy after successful check").Default("2s").DurationVar(&p.HealthCheckReturnGap)
+	app.Flag("s3.endpoint", "address to s3 endpoint").Envar("S3_ENDPOINT").StringVar(&p.S3Endpoint)
+	app.Flag("s3.access", "s3 access key").Envar("AWS_ACCESS_KEY_ID").StringVar(&p.S3AccessKey)
+	app.Flag("s3.secret", "s3 secret key").Envar("AWS_SECRET_ACCESS_KEY").StringVar(&p.S3SecretKey)
+	app.Flag("s3.bucket", "s3 storage bucket").Envar("S3_BUCKET").StringVar(&p.S3BucketName)
+	app.Flag("s3.secure", "use tls for connection").Envar("S3_SECURE").Default("true").BoolVar(&p.S3UseSecurity)
+	app.Flag("cleanup.disable", "manage object deletion process").Default("false").BoolVar(&p.DisableCleanupWorker)
+	app.Flag("link.prefix", "prepending stuff for download link").Default("http").StringVar(&p.DownloadLinkPrefix)
 
-	showVersion := flag.Bool("version", false, "Show version")
-
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Println(version.Print(os.Args[0]))
-		os.Exit(0)
-	}
-
-	if os.Getenv("S3_ENDPOINT") != "" {
-		p.S3Endpoint = os.Getenv("S3_ENDPOINT")
-	}
-	if os.Getenv("AWS_ACCESS_KEY_ID") != "" {
-		p.S3AccessKey = os.Getenv("AWS_ACCESS_KEY_ID")
-	}
-	if os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
-		p.S3SecretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
-	}
-	if os.Getenv("S3_BUCKET") != "" {
-		p.S3BucketName = os.Getenv("S3_BUCKET")
-	}
-	if os.Getenv("S3_SECURE") != "" {
-		switch os.Getenv("S3_SECURE") {
-		case "true":
-			p.S3UseSecurity = true
-		case "false":
-			p.S3UseSecurity = false
-		}
-	}
+	app.HelpFlag.Short('h')
+	app.Version(version.Print(os.Args[0]))
+	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	if p.S3AccessKey == "" || p.S3SecretKey == "" || p.S3Endpoint == "" || p.S3BucketName == "" {
 		fmt.Println("no s3 details given")
 		os.Exit(1)
 	}
+
+	// no thread limit
+	runtime.GOMAXPROCS(-1)
 }
 
 func webListener(server *http.Server, group *sync.WaitGroup) {
@@ -165,8 +111,9 @@ func main() {
 
 	c.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile|log.Lmsgprefix)
 	c.minioClient, err = minio.New(p.S3Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(p.S3AccessKey, p.S3SecretKey, ""),
-		Secure: p.S3UseSecurity,
+		Creds:     credentials.NewStaticV4(p.S3AccessKey, p.S3SecretKey, ""),
+		Secure:    p.S3UseSecurity,
+		Transport: metrics.RoundTripper{},
 	})
 	if err != nil {
 		c.logger.Println(err)
@@ -176,8 +123,9 @@ func main() {
 	sentryInitError := sentry.Init(sentry.ClientOptions{
 		Release:          version.Revision,
 		TracesSampleRate: 1.0,
-		Debug:            true,
+		Debug:            false,
 		EnableTracing:    true,
+		AttachStacktrace: true,
 	})
 	log.Println(sentryInitError)
 	sentryHandler := sentryhttp.New(sentryhttp.Options{
@@ -186,9 +134,9 @@ func main() {
 
 	applicationRouter := mux.NewRouter()
 	applicationRouter.Use(sentryHandler.Handle)
-	applicationRouter.HandleFunc("/{filename}", apiMiddleware(c.UploadHandler, c.logger, "upload")).Methods(http.MethodPut)
-	applicationRouter.HandleFunc("/{id}/{filename}", apiMiddleware(c.DownloadHandler, c.logger, "download")).Methods(http.MethodGet)
-	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", apiMiddleware(c.DownloadHandler, c.logger, "sum")).Methods(http.MethodGet)
+	applicationRouter.HandleFunc("/{filename}", metrics.ApiMiddleware(c.UploadHandler, c.logger, "upload")).Methods(http.MethodPut)
+	applicationRouter.HandleFunc("/{id}/{filename}", metrics.ApiMiddleware(c.DownloadHandler, c.logger, "download")).Methods(http.MethodGet)
+	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", metrics.ApiMiddleware(c.DownloadHandler, c.logger, "sum")).Methods(http.MethodGet)
 
 	metricsRouter := mux.NewRouter()
 	metricsRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
