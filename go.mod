@@ -7,8 +7,8 @@ require (
 	github.com/bonsai-oss/mux v1.8.1
 	github.com/fsrv-xyz/version v0.0.1
 	github.com/getsentry/sentry-go v0.25.0
-	github.com/google/uuid v1.4.0
-	github.com/minio/minio-go/v7 v7.0.65
+	github.com/google/uuid v1.5.0
+	github.com/minio/minio-go/v7 v7.0.66
 	github.com/prometheus/client_golang v1.17.0
 )
 
