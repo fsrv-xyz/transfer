@@ -46,7 +46,7 @@ review::stop:
   stage: review
 
 Integration Tests:
-  image: debian:stable-slim
+  image: debian:stable-slim@sha256:d4494b6af5eafd77c251e7eb1b5bfefc99a7b81172e80c30feb883898f7e5655
   stage: review
   needs:
     - job: review::start
