@@ -9,7 +9,7 @@ require (
 	github.com/getsentry/sentry-go v0.25.0
 	github.com/google/uuid v1.5.0
 	github.com/minio/minio-go/v7 v7.0.66
-	github.com/prometheus/client_golang v1.17.0
+	github.com/prometheus/client_golang v1.18.0
 )
 
 require (
