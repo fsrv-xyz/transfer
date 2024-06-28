@@ -26,6 +26,7 @@ func (c *Config) HealthCheckWorker(ctx context.Context, done chan<- interface{})
 			}
 			exist, err := c.minioClient.BucketExists(ctx, p.S3BucketName)
 			if err != nil || !exist {
+				traceLog(c.logger, fmt.Sprintf("bucket does not exist or error while checking: %#q", err))
 				if backendState == StateHealthy {
 					backendState = StateUnhealthy
 					traceLog(c.logger, fmt.Sprintf("switching to state %+q\n", backendState))
