@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.8.1@sha256:e87caa74dcb7d46cd820352bfea12591f3dba3ddc4285e19c7dcd13359f7cefd
-FROM golang:1.22.4@sha256:c8736b8dbf2b12c98bb0eeed91eef58ecef52b8c2bd49b8044531e8d8d8d58e8 AS builder
+FROM golang:1.22.5@sha256:fcae9e0e7313c6467a7c6632ebb5e5fab99bd39bd5eb6ee34a211353e647827a AS builder
 ARG CI_JOB_ID
 ARG CI_COMMIT_SHORT_SHA
 WORKDIR /build
