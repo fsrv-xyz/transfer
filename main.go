@@ -71,7 +71,7 @@ func init() {
 	app := kingpin.New("transfer", "Daemon transferring files to s3 compatible storage")
 	app.Flag("web.listen-address", "web server listen address").Default(":8080").StringVar(&p.ListenAddress)
 	app.Flag("metrics.listen-address", "metrics endpoint listen address").Default("127.0.0.1:9042").StringVar(&p.MetricsListenAddress)
-	app.Flag("upload.limit", "Upload limit in GiB").Default("2").Int64Var(&p.UploadLimitGB)
+	app.Flag("upload.limit", "Upload limit in GiB").Envar("UPLOAD_LIMIT").Default("2").Int64Var(&p.UploadLimitGB)
 	app.Flag("cleanup.interval", "interval in seconds for cleanup").Default("60").IntVar(&p.CleanupInterval)
 	app.Flag("healthcheck.interval", "interval in seconds for healthcheck").Default("2").IntVar(&p.HealthCheckInterval)
 	app.Flag("healthcheck.return.gap", "time in seconds for declaring the service as healthy after successful check").Default("2s").DurationVar(&p.HealthCheckReturnGap)
