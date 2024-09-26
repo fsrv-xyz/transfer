@@ -10,11 +10,9 @@ stages:
 .semver_template_defaults:
   stage: release
 include:
-  - remote: https://gitlab.com/bonsai-oss/organization/ci-templates/-/raw/main/templates/language/go.yml
-  - remote: https://gitlab.com/bonsai-oss/organization/ci-templates/-/raw/main/templates/release/semver.yml
-  - project: fsrvcorp/ci-templates
-    file:
-      - kubernetes-review.yaml
+  - { project: fsrvcorp/templates, file: templates/language/go.yml, ref: 1.0.9 }
+  - { project: fsrvcorp/templates, file: templates/release/semver.yml, ref: 1.0.9 }
+  - { project: fsrvcorp/ci-templates, file: kubernetes-review.yaml, ref: 1.0.1 }
 
 variables:
   KUBE_BASE_DIR: "${CI_PROJECT_DIR}/.it/kubernetes"
