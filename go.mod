@@ -6,10 +6,10 @@ require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/bonsai-oss/mux v1.8.1
 	github.com/fsrv-xyz/version v0.0.1
-	github.com/getsentry/sentry-go v0.28.1
+	github.com/getsentry/sentry-go v0.29.0
 	github.com/google/uuid v1.6.0
-	github.com/minio/minio-go/v7 v7.0.76
-	github.com/prometheus/client_golang v1.20.3
+	github.com/minio/minio-go/v7 v7.0.77
+	github.com/prometheus/client_golang v1.20.4
 )
 
 require (
