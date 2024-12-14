@@ -10,7 +10,7 @@ require (
 	github.com/fsrv-xyz/version v0.0.1
 	github.com/getsentry/sentry-go v0.30.0
 	github.com/google/uuid v1.6.0
-	github.com/minio/minio-go/v7 v7.0.81
+	github.com/minio/minio-go/v7 v7.0.82
 	github.com/prometheus/client_golang v1.20.5
 )
 
