@@ -12,7 +12,7 @@ stages:
 include:
   - { project: fsrvcorp/templates, file: templates/language/go.yml, ref: 1.0.10 }
   - { project: fsrvcorp/templates, file: templates/release/semver.yml, ref: 1.0.10 }
-  - { project: fsrvcorp/ci-templates, file: kubernetes-review.yaml, ref: 1.0.2 }
+  - { project: fsrvcorp/ci-templates, file: kubernetes-review.yaml, ref: 1.0.3 }
 
 variables:
   KUBE_BASE_DIR: "${CI_PROJECT_DIR}/.it/kubernetes"
