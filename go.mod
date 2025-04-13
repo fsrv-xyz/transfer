@@ -2,16 +2,16 @@ module transfer
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.24.2
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/bonsai-oss/mux v1.8.1
 	github.com/fsrv-xyz/version v0.0.1
-	github.com/getsentry/sentry-go v0.31.1
+	github.com/getsentry/sentry-go v0.32.0
 	github.com/google/uuid v1.6.0
-	github.com/minio/minio-go/v7 v7.0.89
-	github.com/prometheus/client_golang v1.21.1
+	github.com/minio/minio-go/v7 v7.0.90
+	github.com/prometheus/client_golang v1.22.0
 )
 
 require (
@@ -32,8 +32,8 @@ require (
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
-	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	google.golang.org/protobuf v1.36.1 // indirect
+	google.golang.org/protobuf v1.36.5 // indirect
 )
