@@ -10,8 +10,8 @@ stages:
 .semver_template_defaults:
   stage: release
 include:
-  - { project: fsrvcorp/templates, file: templates/language/go.yml, ref: 1.0.12 }
-  - { project: fsrvcorp/templates, file: templates/release/semver.yml, ref: 1.0.12 }
+  - { project: fsrvcorp/templates, file: templates/language/go.yml, ref: 1.0.13 }
+  - { project: fsrvcorp/templates, file: templates/release/semver.yml, ref: 1.0.13 }
   - { project: fsrvcorp/ci-templates, file: kubernetes-review.yaml, ref: 1.0.8 }
 
 variables:
