@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w \
     -X github.com/fsrv-xyz/version.Revision=${CI_COMMIT_SHORT_SHA} \
     " -trimpath
 
-FROM debian:sid as certs
+FROM debian:sid@sha256:a83aa6a568106eba94002d568df61b5fc23f22f8298fd47d2fc4d0dea2b13636 as certs
 RUN apt update && apt install -y ca-certificates
 
 FROM scratch
