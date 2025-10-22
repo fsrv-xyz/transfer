@@ -2,13 +2,13 @@ module transfer
 
 go 1.23.0
 
-toolchain go1.25.1
+toolchain go1.25.3
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/bonsai-oss/mux v1.8.1
 	github.com/fsrv-xyz/version v0.0.1
-	github.com/getsentry/sentry-go v0.35.3
+	github.com/getsentry/sentry-go v0.36.1
 	github.com/google/uuid v1.6.0
 	github.com/minio/minio-go/v7 v7.0.95
 	github.com/prometheus/client_golang v1.23.2
