@@ -135,8 +135,8 @@ func main() {
 	applicationRouter := mux.NewRouter()
 	applicationRouter.Use(sentryHandler.Handle)
 	applicationRouter.HandleFunc("/{filename}", metrics.ApiMiddleware(c.UploadHandler, c.logger, "upload")).Methods(http.MethodPut)
-	applicationRouter.HandleFunc("/{id}/{filename}", metrics.ApiMiddleware(c.DownloadHandler, c.logger, "download")).Methods(http.MethodGet)
-	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", metrics.ApiMiddleware(c.DownloadHandler, c.logger, "sum")).Methods(http.MethodGet)
+	applicationRouter.HandleFunc("/{id}/{filename}", metrics.ApiMiddleware(c.DownloadHandler, c.logger, "download")).Methods(http.MethodGet, http.MethodHead)
+	applicationRouter.HandleFunc("/{id}/{filename}/{sum:sum}", metrics.ApiMiddleware(c.DownloadHandler, c.logger, "sum")).Methods(http.MethodGet, http.MethodHead)
 
 	metricsRouter := mux.NewRouter()
 	metricsRouter.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)

@@ -90,6 +90,10 @@ func (c *Config) DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(object.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 
+	if r.Method == http.MethodHead {
+		return
+	}
+
 	objectGetSpan := handlerMainSpan.StartChild("object.get")
 	reader, err := c.minioClient.GetObject(objectGetSpan.Context(), p.S3BucketName, object.Key, minio.GetObjectOptions{})
 	if err != nil {
