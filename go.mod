@@ -1,8 +1,6 @@
 module transfer
 
-go 1.25
-
-toolchain go1.26.2
+go 1.26.2
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
