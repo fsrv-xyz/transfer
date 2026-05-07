@@ -1,23 +1,28 @@
-name: Exporter Release
+name: Release
 on:
   push:
     tags:
       - '*'
+permissions:
+  contents: write
 jobs:
-  release:
+  goreleaser:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      -
+        name: Checkout
         uses: actions/checkout@v6
         with:
-          path: src/github.com/fsrv-xyz/transfer
-      - name: Setup Go
+          fetch-depth: 0
+      -
+        name: Set up Go
         uses: actions/setup-go@v6
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
         with:
-          go-version: 1.26.2
-      - name: Release
-        shell: bash --noprofile --norc -x -eo pipefail {0}
+          distribution: goreleaser
+          version: latest
+          args: release --clean
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-        run: |
-          curl --location http://git.io/goreleaser | bash
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
