@@ -1,34 +1,100 @@
 * Transfer
-This project holds a simple go application for uploading, downloading and checksumming of files.
-All actions require a S3 based storage like minio.
 
-** Parameters
-#+BEGIN_SRC
-Usage of ./transfer:
-  -cleanup.disable
-    	manage object deletion process
-  -cleanup.interval int
-    	interval in seconds for cleanup (default 60)
-  -healthcheck.interval int
-    	interval in seconds for healthcheck (default 2)
-  -healthcheck.return.gap duration
-    	time in seconds for declaring the service as healthy after successful check (default 2s)
-  -link.prefix string
-    	prepending stuff for download link (default "http")
-  -metrics.listen-address string
-    	metrics endpoint listen address (default "127.0.0.1:9042")
-  -s3.access string
-    	s3 access key
-  -s3.bucket string
-    	s3 storage bucket
-  -s3.endpoint string
-    	address to s3 endpoint
-  -s3.secret string
-    	s3 secret key
-  -s3.secure
-    	use tls for connection (default true)
-  -upload.limit int
-    	Upload limit in GiB (default 2)
-  -web.listen-address string
-    	web server listen address (default ":8080")
+A lightweight Go application for secure file transfer with S3-compatible storage backends.
+
+** Features
+
+- SHA512 checksum verification
+- Prometheus metrics and error tracking
+- Automatic cleanup of old files
+
+** Quick Start
+
+*** Using Docker Compose
+
+The easiest way to get started with a local MinIO instance:
+
+#+BEGIN_SRC bash
+cd example
+docker-compose up
+#+END_SRC
+
+This starts both MinIO (S3 storage) and the Transfer service.
+
+*** Manual Setup
+
+1. Start a S3-compatible storage service (MinIO, AWS S3, etc.)
+2. Build the application: `go build -o transfer`
+3. Run with required environment variables:
+
+#+BEGIN_SRC bash
+export S3_ENDPOINT=minio:9000
+export AWS_ACCESS_KEY_ID=minio
+export AWS_SECRET_ACCESS_KEY=minio123
+export S3_BUCKET=transfer
+./transfer
+#+END_SRC
+
+** API Endpoints
+
+*** Upload a File
+
+#+BEGIN_SRC bash
+curl --upload-file /path/to/file http://localhost:8080/
+#+END_SRC
+
+Returns a URL to download the file, including the generated ID.
+
+*** Download a File
+
+#+BEGIN_SRC bash
+curl http://localhost:8080/{id}/filename -o filename
+#+END_SRC
+
+*** Download Checksum
+
+#+BEGIN_SRC bash
+curl http://localhost:8080/{id}/filename/sum
+#+END_SRC
+
+Returns the SHA512 checksum of the file.
+
+** Configuration
+
+All settings can be configured via command-line flags or environment variables. Run with `-h` for the full list of options.
+
+** Monitoring
+
+Health check endpoints: `/-/healthy` and `/-/ready`
+
+Prometheus metrics available at `/metrics`
+
+** Building
+
+#+BEGIN_SRC bash
+CGO_ENABLED=0 go build -o transfer
+#+END_SRC
+
+A Taskfile is included for convenient Docker image building and publishing.
+
+** Docker
+
+Build and run in a container:
+
+#+BEGIN_SRC bash
+docker build -t transfer .
+docker run -p 8080:8080 -p 8081:8081 \
+  -e S3_ENDPOINT=minio:9000 \
+  -e AWS_ACCESS_KEY_ID=minio \
+  -e AWS_SECRET_ACCESS_KEY=minio123 \
+  -e S3_BUCKET=transfer \
+  transfer
+#+END_SRC
+
+** Development
+
+Run tests:
+
+#+BEGIN_SRC bash
+go test ./...
 #+END_SRC
