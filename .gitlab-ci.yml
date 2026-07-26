@@ -3,15 +3,12 @@ stages:
   - test
   - build
   - review
-  - release
 
-.go_template_defaults:
-  stage: test
-.semver_template_defaults:
-  stage: release
 include:
-  - { project: fsrvcorp/templates, file: templates/language/go.yml, ref: 1.0.15 }
-  - { project: fsrvcorp/templates, file: templates/release/semver.yml, ref: 1.0.15 }
+  - component: $CI_SERVER_FQDN/fsrvcorp/ci-components/golang@0.1.0
+    inputs:
+      stage: test
+  - component: $CI_SERVER_FQDN/fsrvcorp/ci-components/semver@0.1.0
   - { project: fsrvcorp/ci-templates, file: kubernetes-review.yaml, ref: 1.0.8 }
 
 variables:
